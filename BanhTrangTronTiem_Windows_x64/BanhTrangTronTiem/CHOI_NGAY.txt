@@ -1,0 +1,14 @@
+﻿BÁNH TRÁNG TRỘN TIỆM — WINDOWS x64
+
+Giải nén toàn bộ folder rồi mở BanhTrangTiem.exe.
+Không cần cài CMake, MinGW hoặc VS Code để chơi bản có sẵn.
+Giữ assets, data và openal32.dll cạnh file exe.
+Trong menu có nút Cách chơi. ESC để tạm dừng.
+
+Game tự lưu tiền, ngày, nâng cấp và topping tại:
+%LOCALAPPDATA%\BanhTrangTronTiem\save.json
+
+Toàn bộ source C++17 ở MaNguon/.
+README.md có cách build lại nếu muốn sửa game.
+ASSETS.md có danh sách ảnh và prompt tạo asset.
+VERIFICATION.md ghi rõ phạm vi đã kiểm thử.

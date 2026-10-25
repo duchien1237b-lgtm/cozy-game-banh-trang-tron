@@ -1,0 +1,70 @@
+{
+  "customers": [
+    {
+      "id": "student",
+      "name": "An",
+      "style": "student",
+      "color": [
+        104,
+        148,
+        152
+      ],
+      "patience_factor": 1.1
+    },
+    {
+      "id": "college",
+      "name": "Minh",
+      "style": "student",
+      "color": [
+        195,
+        134,
+        95
+      ],
+      "patience_factor": 1
+    },
+    {
+      "id": "auntie",
+      "name": "Cô Hạnh",
+      "style": "auntie",
+      "color": [
+        169,
+        115,
+        142
+      ],
+      "patience_factor": 1.2
+    },
+    {
+      "id": "uncle",
+      "name": "Chú Bình",
+      "style": "uncle",
+      "color": [
+        115,
+        142,
+        107
+      ],
+      "patience_factor": 1.15
+    },
+    {
+      "id": "courier",
+      "name": "Anh shipper",
+      "style": "courier",
+      "color": [
+        79,
+        148,
+        131
+      ],
+      "patience_factor": 0.9
+    },
+    {
+      "id": "office",
+      "name": "Chị Linh",
+      "style": "office",
+      "color": [
+        128,
+        139,
+        174
+      ],
+      "patience_factor": 1
+    }
+  ]
+}
