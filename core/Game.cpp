@@ -127,7 +127,6 @@ void Game::handleEvents() {
             break;
     }
 }
-
 void Game::run() {
     sf::Clock clock;
     unsigned lastScene = states_.sceneChanges();
@@ -148,7 +147,6 @@ void Game::run() {
         window_.clear({46, 36, 30});
         window_.setView(view_);
         states_.render(window_);
-        // Chuyển cảnh: màn mới hiện dần từ tối thay vì cắt cứng.
         if (states_.sceneChanges() != lastScene) {
             lastScene = states_.sceneChanges();
             fade = 1.f;
