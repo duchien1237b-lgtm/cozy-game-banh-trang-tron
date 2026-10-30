@@ -100,6 +100,23 @@ Progress SaveSystem::load(const GameData &d) {
             p.music = std::clamp(j.value("music", 32.f), 0.f, 100.f);
             p.sfx = std::clamp(j.value("sfx", 60.f), 0.f, 100.f);
             p.bestRating = std::clamp(j.value("best_rating", 0.f), 0.f, 5.f);
+            p.fiveStars = std::clamp(j.value("five_stars", 0), 0, 10000000);
+            p.perfectMixes = std::clamp(j.value("perfect_mixes", 0), 0, 10000000);
+            p.bestCombo = std::clamp(j.value("best_combo", 0), 0, 100000);
+            p.rushServed = std::clamp(j.value("rush_served", 0), 0, 10000000);
+            p.goalsDone = std::clamp(j.value("goals_done", 0), 0, 10000000);
+            p.perfectDays = std::clamp(j.value("perfect_days", 0), 0, 100000);
+            p.dailyStreak = std::clamp(j.value("daily_streak", 0), 0, 100000);
+            p.lastDaily = j.value("last_daily", static_cast<std::int64_t>(-1));
+            p.tutorialDone = j.value("tutorial_done", false);
+            p.fullscreen = j.value("fullscreen", false);
+            if (const auto earned = j.find("achievements"); earned != j.end() && earned->is_array()) {
+                std::set<std::string> known;
+                for (const auto &info : AchievementSystem::all()) known.insert(info.id);
+                for (const auto &entry : *earned)
+                    if (entry.is_string() && known.count(entry.get<std::string>()))
+                        p.achievements.insert(entry.get<std::string>());
+            }
             p.levels.clear();
             p.unlocked.clear();
             const auto unlocks = j.at("unlocked").get<std::set<std::string>>();
@@ -132,7 +149,12 @@ bool SaveSystem::write(const Progress &p) {
         nlohmann::json j = {{"version", 1},           {"day", p.day},       {"money", p.money},
                             {"lifetime", p.lifetime}, {"served", p.served}, {"best_rating", p.bestRating},
                             {"music", p.music},       {"sfx", p.sfx},       {"unlocked", p.unlocked},
-                            {"upgrades", p.levels}};
+                            {"upgrades", p.levels},   {"five_stars", p.fiveStars},
+                            {"perfect_mixes", p.perfectMixes}, {"best_combo", p.bestCombo},
+                            {"rush_served", p.rushServed},     {"goals_done", p.goalsDone},
+                            {"perfect_days", p.perfectDays},   {"daily_streak", p.dailyStreak},
+                            {"last_daily", p.lastDaily},       {"tutorial_done", p.tutorialDone},
+                            {"fullscreen", p.fullscreen},      {"achievements", p.achievements}};
         j["reviews"] = nlohmann::json::array();
         const std::size_t first = p.reviews.size() > 100 ? p.reviews.size() - 100 : 0;
         for (std::size_t i = first; i < p.reviews.size(); ++i) {

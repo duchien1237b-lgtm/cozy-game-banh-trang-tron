@@ -234,3 +234,20 @@ Nhịp trộn Perfect và Good dùng hai file mới do người dùng cung cấp
 ## Hiệu ứng xé, tích lực và đánh nhịp
 
 Đã thêm atlas 6 sprite RGBA tại assets/images/cozy/effects/cooking_fx.png, tạo bằng imagegen tích hợp; prompt và bản đồ sprite nằm trong README.md cùng thư mục. Vụn bánh/vệt xé bám thao tác rê chuột, vụn tỏa ra khi hoàn thành giai đoạn. Thanh topping có 3 dải màu, tia sáng ở đầu thanh và khi lên mức/thả topping; icon chạm tô lóe nhẹ. Thanh nhịp có viền, vệt chạy và phản hồi Miss/Good/Perfect riêng tại vị trí bấm. Sprite tự mờ, có giới hạn số lượng và xóa khi làm lại tô.
+
+## Âm thanh bổ sung
+
+`tools/generate_new_sfx.py` sinh các file WAV: achievement, coin_fly, combo_up, reward_claim, rush_start, undo, warning_tick, whoosh (tự tạo, không dùng nguồn ngoài).
+
+## Khôi phục giọng khách trên bản cập nhật
+
+Đã chèn lại bốn giọng khách vào code của bản game mới: An, Minh và Bé Mai dùng childen_happy.mp3; Cô Hạnh, Chị Linh, Bà Tư và Chị Dung dùng female_happy.mp3; Anh shipper, Anh Khang và Anh Bảo dùng man_happy.mp3; Chú Bình dùng oldman_happy.mp3. Ưu tiên trẻ em trước giới tính; Bà Tư vẫn dùng giọng nữ. Mỗi sự kiện phát trễ giữ riêng giọng của đúng khách đã phục vụ. File âm thanh chung cũ đã được xóa.
+
+## Icon Quà hằng ngày và Thành tựu ở hai góc menu
+
+Quà hằng ngày dùng icon hộp quà ở góc trên trái; Thành tựu dùng icon cúp vàng ở góc trên phải. Hai nút hàng dưới cũ đã được bỏ. Icon có nền tròn, nhãn tên, trạng thái hover/nhấn; dấu báo quà chưa nhận theo sát icon trái và bộ đếm thành tựu nằm dưới cúp. PNG và prompt imagegen tích hợp được ghi tại assets/images/cozy/ui/menu_icons.md. Mã xử lý vẫn mở đúng cửa sổ Quà hằng ngày/Thành tựu hiện có.
+
+
+## Tô hoàn thiện từ bowl_remodel
+
+Hai PNG do người dùng cung cấp tại assets/images/bowl_remodel/: bowl_topping_before_mix.png cho tô đủ lượng topping của khách đang chọn (sau khi icon rơi hoàn tất), bowl_topping_after_mix.png sau khi trộn xong. Ảnh giữ tỉ lệ và nền trong suốt; không vẽ chồng topping lên model hoàn thiện. Tô đang thêm nguyên liệu vẫn dùng từng topping riêng. Assets được đồng bộ vào bộ chạy và mã nguồn.

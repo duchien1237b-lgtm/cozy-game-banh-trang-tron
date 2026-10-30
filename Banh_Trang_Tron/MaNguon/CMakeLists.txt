@@ -55,6 +55,7 @@ add_executable(BanhTrangTiem
     src/states/PlayingState.cpp
     src/states/ReviewsState.cpp
     src/states/OverlayState.cpp
+    src/states/RewardState.cpp
     src/states/ManagementState.cpp)
 target_link_libraries(BanhTrangTiem PRIVATE tiem_core)
 if(WIN32)
@@ -135,7 +136,7 @@ option(TIEM_BUILD_PREVIEW "Build offscreen UI preview exporter" OFF)
 if(TIEM_BUILD_PREVIEW)
     add_executable(tiem_preview tools/PreviewUi.cpp
         src/states/MainMenuState.cpp src/states/PlayingState.cpp src/states/ManagementState.cpp
-        src/states/ReviewsState.cpp src/states/OverlayState.cpp)
+        src/states/ReviewsState.cpp src/states/OverlayState.cpp src/states/RewardState.cpp)
     target_link_libraries(tiem_preview PRIVATE tiem_core)
     tiem_warnings(tiem_preview)
     if(MINGW)

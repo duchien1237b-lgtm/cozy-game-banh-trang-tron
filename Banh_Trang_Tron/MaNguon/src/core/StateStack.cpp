@@ -34,13 +34,16 @@ void StateStack::applyPendingChanges() {
     auto changes = std::move(pending_);
     pending_.clear();
     for (const auto &change : changes) {
-        if (change.action == Action::Clear)
+        if (change.action == Action::Clear) {
             entries_.clear();
+            ++sceneChanges_;
+        }
         else if (change.action == Action::Pop) {
             if (!entries_.empty())
                 entries_.pop_back();
         } else {
             auto next = create(change.id);
+            if (change.action == Action::Replace) ++sceneChanges_;
             if (change.action == Action::Replace && !entries_.empty())
                 entries_.pop_back();
             if (!entries_.empty())

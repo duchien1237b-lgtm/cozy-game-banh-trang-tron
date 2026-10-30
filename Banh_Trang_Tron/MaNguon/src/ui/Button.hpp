@@ -15,6 +15,7 @@ class Button {
         clickSound_ = std::move(hook);
     }
     void setResources(ResourceManager &resources) { resources_ = &resources; }
+    void setIcon(std::string path) { iconPath_ = std::move(path); }
     void setEnabled(bool enabled);
     void setLabel(std::string label) {
         label_ = std::move(label);
@@ -31,6 +32,7 @@ class Button {
     ResourceManager *resources_{nullptr};
     const sf::Font &font_;
     std::string label_;
+    std::string iconPath_;
     sf::FloatRect bounds_;
     Callback onClick_;
     Callback clickSound_;

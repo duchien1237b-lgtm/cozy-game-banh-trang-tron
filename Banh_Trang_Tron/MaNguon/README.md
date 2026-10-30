@@ -213,3 +213,11 @@ Ngày đầu mỗi đơn gồm 3–5 loại tùy khách, mỗi loại 1 muỗng.
 Bản chơi nằm ở GocNhoBanhTrang.exe cùng assets/, data/ và openal32.dll. Mã nguồn, CMakeLists.txt, script build, tests và công cụ preview vẫn nằm trong MaNguon/. Giữ giấy phép và thông tin nguồn tài nguyên trong licenses/, assets/fonts/ và MaNguon/ASSETS.md. Lịch sử Git được giữ để tiếp tục phát triển.
 
 Đã xóa công cụ tải tạm .tools/, thư mục build-mingw/, các EXE dự phòng, ảnh kiểm tra previews/ và tài nguyên không được code hiện tại tham chiếu. Muốn build lại, cài CMake và compiler C++17 trong PATH rồi dùng hướng dẫn phía trên; lần cấu hình đầu cần tải lại các thư viện qua FetchContent. Bản chạy có sẵn hoạt động độc lập với các công cụ này.
+
+## Khôi phục giọng khách trên bản cập nhật
+
+Đã chèn lại bốn giọng khách vào code của bản game mới: An, Minh và Bé Mai dùng childen_happy.mp3; Cô Hạnh, Chị Linh, Bà Tư và Chị Dung dùng female_happy.mp3; Anh shipper, Anh Khang và Anh Bảo dùng man_happy.mp3; Chú Bình dùng oldman_happy.mp3. Ưu tiên trẻ em trước giới tính; Bà Tư vẫn dùng giọng nữ. Mỗi sự kiện phát trễ giữ riêng giọng của đúng khách đã phục vụ. File âm thanh chung cũ đã được xóa.
+
+## Icon Quà hằng ngày và Thành tựu ở hai góc menu
+
+Quà hằng ngày dùng icon hộp quà ở góc trên trái; Thành tựu dùng icon cúp vàng ở góc trên phải. Hai nút hàng dưới cũ đã được bỏ. Icon có nền tròn, nhãn tên, trạng thái hover/nhấn; dấu báo quà chưa nhận theo sát icon trái và bộ đếm thành tựu nằm dưới cúp. PNG và prompt imagegen tích hợp được ghi tại assets/images/cozy/ui/menu_icons.md. Mã xử lý vẫn mở đúng cửa sổ Quà hằng ngày/Thành tựu hiện có.

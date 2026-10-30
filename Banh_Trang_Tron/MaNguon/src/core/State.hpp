@@ -9,7 +9,7 @@ struct AppConfig;
 class StateStack;
 struct GameServices;
 class AudioManager;
-enum class StateID { MainMenu, Playing, DayResult, UpgradeShop, Pause, Settings, Reviews };
+enum class StateID { MainMenu, Playing, DayResult, UpgradeShop, Pause, Settings, Reviews, Achievements, DailyReward };
 using Pointer = std::optional<sf::Vector2f>;
 
 struct AppContext {
@@ -19,6 +19,8 @@ struct AppContext {
     std::function<void()> playClick;
     GameServices *game{nullptr};
     AudioManager *audio{nullptr};
+    // Bật/tắt toàn màn hình (Game xử lý việc tạo lại cửa sổ).
+    std::function<void(bool)> setFullscreen;
 };
 
 class State {

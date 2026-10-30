@@ -13,6 +13,8 @@ struct FloatingText {
     sf::Vector2f position;
     sf::Color color;
     float age{}, life{};
+    unsigned size{25};
+    bool outlined{false};
 };
 struct Particle {
     sf::Vector2f position, velocity;
@@ -21,8 +23,11 @@ struct Particle {
 };
 class Effects {
   public:
-    void say(std::string text, sf::Vector2f position, sf::Color color, float life = 1.6f);
-    void burst(sf::Vector2f position, sf::Color color);
+    void say(std::string text, sf::Vector2f position, sf::Color color, float life = 1.6f,
+             unsigned size = 25, bool outlined = false);
+    void burst(sf::Vector2f position, sf::Color color, int count = 12);
+    // Mưa tia sáng nhỏ rơi quanh một điểm (thưởng, mở khóa).
+    void sparkle(sf::Vector2f position, sf::Color color, int count = 18);
     void update(float dt);
     void render(sf::RenderTarget &, const sf::Font &) const;
 

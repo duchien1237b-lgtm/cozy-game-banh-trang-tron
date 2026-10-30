@@ -14,6 +14,7 @@ class Game {
   private:
     void registerStates();
     void resize(unsigned int width, unsigned int height);
+    void applyWindowMode(bool fullscreen);
     Pointer mouseFor(const sf::Event &event) const;
     void handleEvents();
     std::filesystem::path root_;
@@ -27,5 +28,6 @@ class Game {
     AppContext context_;
     StateStack states_;
     bool focused_{true};
+    bool fullscreen_{false};
 };
 } // namespace tiem

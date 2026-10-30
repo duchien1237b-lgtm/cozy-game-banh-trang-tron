@@ -5,6 +5,7 @@
 #include "states/ManagementState.hpp"
 #include "states/ReviewsState.hpp"
 #include "states/OverlayState.hpp"
+#include "states/RewardState.hpp"
 #include "core/Utf8.hpp"
 #include <iostream>
 #include <cmath>
@@ -30,11 +31,13 @@ int main(int argc, char **argv) {
     sf::RenderWindow window;
     tiem::StateStack stack;
     tiem::AppContext context{window, resources, config, [] {}, &game, nullptr};
-    const bool testEffects = argc == 4 && std::string(argv[3]) == "--sfx-test";
+    const bool testVoices = argc == 4 && std::string(argv[3]) == "--happy-test";
+    const bool testEffects = testVoices || (argc == 4 && std::string(argv[3]) == "--sfx-test");
     std::unique_ptr<tiem::AudioManager> effectAudio;
     if (testEffects) {
         for (const auto *name : {"choose-topping.mp3", "giao-mon.mp3",
-                                 "people-background-noise.mp3", "perfect-mixed.mp3", "purchased.mp3",
+                                 "people-background-noise.mp3", "purchased.mp3",
+                                 "childen_happy.mp3", "female_happy.mp3", "man_happy.mp3", "oldman_happy.mp3",
                                  "selecting-button.mp3", "tear-ricepaper.mp3", "pop.mp3",
                                  "female_customer_leave.mp3", "male_customer_leave.mp3", "day_end.mp3", "charging_sound.mp3",
                                  "mix/perfect-mixed.mp3", "mix/good-mixed.mp3", "mix/miss-mixed.mp3"}) {
@@ -51,6 +54,22 @@ int main(int argc, char **argv) {
         if (testEffects && effectAudio->lastEffectPath() != std::string("assets/audio/sfx/sound-effect/") + name)
             throw std::runtime_error(std::string("Wrong effect for interaction: ") + name + " got " + effectAudio->lastEffectPath());
     };
+    if (testVoices) {
+        const std::map<std::string, std::string> expected = {
+            {"student", "childen_happy.mp3"}, {"college", "childen_happy.mp3"},
+            {"schoolgirl", "childen_happy.mp3"}, {"auntie", "female_happy.mp3"},
+            {"office", "female_happy.mp3"}, {"grandma", "female_happy.mp3"},
+            {"special_guest", "female_happy.mp3"}, {"uncle", "oldman_happy.mp3"},
+            {"courier", "man_happy.mp3"}, {"mechanic", "man_happy.mp3"},
+            {"photographer", "man_happy.mp3"}
+        };
+        for (const auto &kind : game.data.customers) {
+            effectAudio->play(kind.happySound());
+            expectEffect(expected.at(kind.id).c_str());
+        }
+        std::cout << "Decoded four happy voices and verified routing for all 11 customers, including Minh.\n";
+        return 0;
+    }
     if (argc == 4 && std::string(argv[3]) == "--music-only") {
         const auto durationOf = [&](const char *name) {
             sf::InputSoundFile input;
@@ -89,21 +108,72 @@ int main(int argc, char **argv) {
     }
     sf::RenderTexture target;
     if (!target.create(1280, 720)) return 3;
+    if (argc == 4 && std::string(argv[3]) == "--menu-icons") {
+        game.dailyPrompted = true;
+        for (const auto *path : {"assets/images/cozy/ui/daily_gift_icon.png",
+                                  "assets/images/cozy/ui/achievement_icon.png"})
+            if (!resources.texture(path)) throw std::runtime_error("Missing menu icon");
+        stack.registerFactory(tiem::StateID::MainMenu, [&] { return std::make_unique<tiem::MainMenuState>(stack, context); });
+        stack.registerFactory(tiem::StateID::DailyReward, [&] { return std::make_unique<tiem::DailyRewardState>(stack, context); });
+        stack.registerFactory(tiem::StateID::Achievements, [&] { return std::make_unique<tiem::AchievementsState>(stack, context); });
+        stack.push(tiem::StateID::MainMenu);
+        stack.applyPendingChanges();
+        const auto captureMenu = [&](const char *name) {
+            target.clear(); stack.render(target); target.display();
+            if (!target.getTexture().copyToImage().saveToFile((output / name).string()))
+                throw std::runtime_error("Cannot save menu icon preview");
+        };
+        const auto clickMenu = [&](sf::Vector2f position) {
+            sf::Event e{}; e.mouseButton.button = sf::Mouse::Left;
+            e.type = sf::Event::MouseButtonPressed; stack.handleEvent(e, position);
+            e.type = sf::Event::MouseButtonReleased; stack.handleEvent(e, position);
+        };
+        stack.update(1.f);
+        captureMenu("menu-icons.png");
+        sf::Event hover{}; hover.type = sf::Event::MouseMoved;
+        stack.handleEvent(hover, sf::Vector2f(72, 59)); stack.update(.2f);
+        captureMenu("menu-gift-hover.png");
+        clickMenu({72, 59});
+        if (stack.top() != tiem::StateID::DailyReward) throw std::runtime_error("Left icon did not open daily reward");
+        stack.update(.3f); captureMenu("menu-daily-open.png");
+        clickMenu({640, 602});
+        if (stack.top() != tiem::StateID::MainMenu) throw std::runtime_error("Daily reward did not close");
+        clickMenu({1208, 59});
+        if (stack.top() != tiem::StateID::Achievements) throw std::runtime_error("Right icon did not open achievements");
+        stack.update(.3f); captureMenu("menu-achievements-open.png");
+        clickMenu({640, 639});
+        clickMenu({168, 578}); clickMenu({356, 578});
+        if (stack.top() != tiem::StateID::MainMenu || stack.size() != 1)
+            throw std::runtime_error("Old reward button hit areas still active");
+        game.progress.lastDaily = tiem::DailyReward::today();
+        game.progress.dailyStreak = 1;
+        game.progress.achievements.insert(tiem::AchievementSystem::all().front().id);
+        captureMenu("menu-icons-claimed.png");
+        // Reset confirmation must capture clicks before the corner buttons.
+        clickMenu({262, 414}); clickMenu({72, 59}); clickMenu({1208, 59});
+        if (stack.top() != tiem::StateID::MainMenu || stack.size() != 1)
+            throw std::runtime_error("Corner icons bypassed reset confirmation");
+        std::cout << "Menu icons rendered; left/right navigation, close, removed hit areas and modal input passed.\n";
+        return 0;
+    }
     if (argc == 4 && std::string(argv[3]) == "--bowls-only") {
+        for (const auto *path : {"assets/images/bowl_remodel/bowl_topping_before_mix.png",
+                                  "assets/images/bowl_remodel/bowl_topping_after_mix.png"})
+            if (!resources.texture(path)) throw std::runtime_error("Missing remodeled bowl texture");
         target.clear({255, 248, 230});
-        const char *labels[] = {"Bánh vừa xé trong tô", "Có topping • Chưa trộn", "Đã trộn xong"};
+        const char *labels[] = {"Bánh vừa xé", "Đang thêm topping", "Đủ topping • Chưa trộn", "Đã trộn xong"};
         tiem::Bowl bowl;
-        for (int state = 0; state < 3; ++state) {
+        for (int state = 0; state < 4; ++state) {
             if (state == 1) bowl.portions.push_back(game.data.toppings.front().id);
-            bowl.mixed = state == 2;
-            const float x = 213.f + state * 427.f;
-            tiem::ui::bowl(target, resources, game.data, bowl, {x, 330}, 1.f);
-            tiem::ui::text(target, resources.uiFont(), labels[state], 21, {x, 520}, {81, 54, 44}, true);
+            bowl.mixed = state == 3;
+            const float x = 160.f + state * 320.f;
+            tiem::ui::bowl(target, resources, game.data, bowl, {x, 330}, .85f, false, state == 2);
+            tiem::ui::text(target, resources.uiFont(), labels[state], 19, {x, 520}, {81, 54, 44}, true);
         }
         target.display();
         if (!target.getTexture().copyToImage().saveToFile((output / "bowl-states.png").string()))
             return 4;
-        std::cout << "Rendered empty, topping and mixed bowls.\n";
+        std::cout << "Loaded both remodel textures; rendered torn paper, partial, complete and mixed bowls.\n";
         return 0;
     }
     const auto capture = [&](tiem::State &state, const char *name) {
@@ -243,7 +313,13 @@ int main(int argc, char **argv) {
     if (game.progress.reviews.size() != 1 || game.progress.reviews.front().text.empty())
         throw std::runtime_error("Delivery did not produce an online review");
     for (int i = 0; i < 6; ++i) playing.update(.1f);
-    if (testEffects) expectEffect("perfect-mixed.mp3");
+    if (testEffects) {
+        const auto &path = effectAudio->lastEffectPath();
+        bool matched = false;
+        for (const auto *voice : {"childen_happy.mp3", "female_happy.mp3", "man_happy.mp3", "oldman_happy.mp3"})
+            matched = matched || path == std::string("assets/audio/sfx/sound-effect/") + voice;
+        if (!matched) throw std::runtime_error("Delivery did not play a customer-specific happy voice");
+    }
     for (int i = 0; i < 30; ++i) playing.update(.1f);
     capture(playing, "playing-review-expired.png");
     // Stress the narrowest layout with four customers and six ingredients per order.

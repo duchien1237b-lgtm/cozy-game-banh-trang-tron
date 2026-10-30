@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <ctime>
 #include <limits>
+#include <ostream>
 #include <stdexcept>
 namespace tiem {
 namespace {
@@ -70,6 +72,8 @@ GameData::GameData(const std::filesystem::path &root) {
         CustomerKind k{j.at("id"), j.at("name"), j.at("style"), color(j.at("color")),
                        j.at("patience_factor")};
         k.femaleVoice = j.value("female_voice", false);
+        k.child = j.value("is_child", false);
+        k.olderAdult = j.value("is_older_adult", false);
         k.special = j.value("is_special", false);
         k.spawnWeight = j.value("spawn_weight", 1.f);
         k.minTypes = j.value("order_min_types", integer("order_initial_types"));
@@ -146,8 +150,31 @@ bool Bowl::add(const std::string &id, int capacity) {
     portions.push_back(id);
     return true;
 }
+bool Bowl::removeLast(std::string *removed) {
+    if (portions.empty() || mixed)
+        return false;
+    if (removed)
+        *removed = portions.back();
+    portions.pop_back();
+    return true;
+}
 int Bowl::count(const std::string &id) const {
     return static_cast<int>(std::count(portions.begin(), portions.end(), id));
+}
+bool operator==(const Bowl &bowl, const Order &order) {
+    if (bowl.portions.empty())
+        return false;
+    int total = 0;
+    for (const auto &item : order.recipe) {
+        if (bowl.count(item.first) != item.second)
+            return false;
+        total += item.second;
+    }
+    return static_cast<int>(bowl.portions.size()) == total;
+}
+std::ostream &operator<<(std::ostream &out, const Receipt &r) {
+    return out << "Công thức " << static_cast<int>(r.recipe * 100) << "% • Xé " << static_cast<int>(r.paper * 100)
+               << "% • Trộn " << static_cast<int>(r.mix * 100) << "% • Tốc độ " << static_cast<int>(r.speed * 100) << "%";
 }
 int Receipt::stars() const {
     return std::clamp(static_cast<int>(std::lround(1.f + 4.f * std::clamp(score, 0.f, 1.f))), 1, 5);
@@ -328,9 +355,123 @@ Receipt EconomySystem::score(const GameData &d, const Progress &p, const Custome
     if (d.customers.at(c.kind).special) r.tip = c.order.price;
     return r;
 }
+const std::vector<AchievementInfo> &AchievementSystem::all() {
+    static const std::vector<AchievementInfo> list = {
+        {"first_order", "Đơn đầu tiên", "Phục vụ vị khách đầu tiên", 1},
+        {"regular_50", "Quán quen", "Phục vụ 50 lượt khách", 50},
+        {"busy_200", "Tiệm đông khách", "Phục vụ 200 lượt khách", 200},
+        {"five_star_10", "Năm sao lấp lánh", "Nhận 10 đơn đạt 5 sao", 10},
+        {"combo_5", "Tay nghề lên hương", "Đạt combo x5", 5},
+        {"combo_10", "Bàn tay vàng", "Đạt combo x10", 10},
+        {"perfect_20", "Nhịp trộn hoàn hảo", "Trộn trúng Perfect 20 lần", 20},
+        {"rush_8", "Chiến thần giờ cao điểm", "Phục vụ 8 khách trong giờ cao điểm", 8},
+        {"rich", "Ông chủ nhỏ", "Kiếm tổng cộng 500.000 đ", 500000},
+        {"perfect_day", "Ngày trọn vẹn", "Một ngày không ai bỏ về, đạt từ 4,5 sao", 1},
+        {"goals_15", "Có chí thì nên", "Hoàn thành 15 nhiệm vụ trong ngày", 15},
+        {"all_toppings", "Đủ vị đủ màu", "Mở khóa mọi loại topping", 1},
+        {"max_upgrades", "Tiệm trong mơ", "Nâng cấp tiệm lên mức tối đa", 1},
+        {"streak_7", "Khách quen mỗi ngày", "Nhận quà hằng ngày 7 ngày liên tiếp", 7},
+    };
+    return list;
+}
+int AchievementSystem::current(const GameData &d, const Progress &p, const std::string &id) {
+    if (id == "first_order" || id == "regular_50" || id == "busy_200") return p.served;
+    if (id == "five_star_10") return p.fiveStars;
+    if (id == "combo_5" || id == "combo_10") return p.bestCombo;
+    if (id == "perfect_20") return p.perfectMixes;
+    if (id == "rush_8") return p.rushServed;
+    if (id == "rich") return p.lifetime;
+    if (id == "perfect_day") return p.perfectDays;
+    if (id == "goals_15") return p.goalsDone;
+    if (id == "streak_7") return p.dailyStreak;
+    if (id == "all_toppings") {
+        int missing = 0;
+        for (const auto &t : d.toppings) missing += p.unlocked.count(t.id) ? 0 : 1;
+        return missing == 0 ? 1 : 0;
+    }
+    if (id == "max_upgrades") {
+        for (const auto &u : d.upgrades)
+            if (UpgradeSystem::level(p, u.id) < static_cast<int>(u.levels.size())) return 0;
+        return 1;
+    }
+    return 0;
+}
+std::vector<std::string> AchievementSystem::check(const GameData &d, Progress &p) {
+    std::vector<std::string> opened;
+    for (const auto &a : all())
+        if (!p.achievements.count(a.id) && current(d, p, a.id) >= a.target) {
+            p.achievements.insert(a.id);
+            opened.push_back(a.id);
+        }
+    return opened;
+}
+std::int64_t DailyReward::today() {
+    const std::time_t now = std::time(nullptr);
+    const std::tm *local = std::localtime(&now);
+    // Thuật toán days-from-civil: không phụ thuộc hệ điều hành hay múi giờ.
+    std::int64_t y = local->tm_year + 1900;
+    const int m = local->tm_mon + 1, d = local->tm_mday;
+    y -= m <= 2;
+    const std::int64_t era = (y >= 0 ? y : y - 399) / 400;
+    const auto yoe = static_cast<unsigned>(y - era * 400);
+    const unsigned doy = (153 * static_cast<unsigned>(m + (m > 2 ? -3 : 9)) + 2) / 5 + static_cast<unsigned>(d) - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + static_cast<std::int64_t>(doe) - 719468;
+}
+bool DailyReward::canClaim(const Progress &p, std::int64_t today) {
+    return p.lastDaily != today;
+}
+int DailyReward::nextIndex(const Progress &p, std::int64_t today) {
+    const int streak = (p.lastDaily >= 0 && p.lastDaily == today - 1) ? p.dailyStreak : 0;
+    return streak % 7;
+}
+int DailyReward::amount(const GameData &d, int index) {
+    static const int fallback[] = {10000, 15000, 20000, 25000, 35000, 45000, 80000};
+    const auto it = d.balance.find("daily_rewards");
+    if (it != d.balance.end() && it->is_array() && it->size() == 7 && (*it)[static_cast<std::size_t>(index % 7)].is_number())
+        return std::max(0, (*it)[static_cast<std::size_t>(index % 7)].get<int>());
+    return fallback[index % 7];
+}
+int DailyReward::claim(const GameData &d, Progress &p, std::int64_t today) {
+    if (!canClaim(p, today)) return 0;
+    const int index = nextIndex(p, today);
+    const int reward = amount(d, index);
+    p.dailyStreak = index + 1;
+    p.lastDaily = today;
+    p.money += reward;
+    AchievementSystem::check(d, p);
+    return reward;
+}
+std::vector<DayGoal> DaySession::makeGoals(const GameData &d, int day) {
+    const int n = std::max(1, day);
+    const auto scale = [&](int base, int step, int cap) { return std::min(cap, base + n / step); };
+    std::vector<DayGoal> pool = {
+        {"serve", "Phục vụ khách", scale(4, 2, 12), 0, 6000 + std::min(n, 20) * 500},
+        {"stars", "Đơn đạt từ 4 sao", scale(2, 3, 8), 0, 8000 + std::min(n, 20) * 400},
+        {"tips", "Tiền tip kiếm được", std::min(60000, 6000 + n * 2000), 0, 8000 + std::min(n, 20) * 400},
+        {"combo", "Đạt combo", scale(3, 4, 7), 0, 10000 + std::min(n, 20) * 500},
+        {"perfect", "Trộn trúng Perfect", scale(3, 3, 12), 0, 7000 + std::min(n, 20) * 400},
+        {"fast", "Giao món khi khách còn kiên nhẫn", scale(3, 3, 8), 0, 9000 + std::min(n, 20) * 400},
+        {"nolose", "Không để khách nào bỏ về", 1, 0, 12000 + std::min(n, 20) * 600},
+    };
+    (void)d;
+    std::mt19937 rng(static_cast<unsigned>(n) * 2654435761u + 12345u);
+    std::shuffle(pool.begin(), pool.end(), rng);
+    pool.resize(3);
+    // Mục tiêu dễ nhất hiện đầu danh sách để người chơi có động lực.
+    std::sort(pool.begin(), pool.end());
+    return pool;
+}
 DaySession::DaySession(const GameData &d, Progress &p, unsigned seed)
-    : data_(d), progress_(p), random_(seed), remaining_(d.number("day_seconds")) {
+    : data_(d), progress_(p), random_(seed), reviewRandom_(seed ^ 0xA511E9B3u),
+      remaining_(d.number("day_seconds")) {
     result_.day = p.day;
+    result_.goals = makeGoals(d, p.day);
+    // Giờ cao điểm dùng bộ sinh riêng để không làm lệch chuỗi khách theo seed.
+    std::mt19937 rushRandom(seed * 2654435761u + 17u);
+    const float day = d.number("day_seconds");
+    rushBegin_ = day * std::uniform_real_distribution<float>(.42f, .62f)(rushRandom);
+    rushEnd_ = rushBegin_ - d.numberOr("rush_seconds", 25.f);
     spawn();
     spawnTimer_ = std::max(d.number("spawn_min_seconds"), d.number("spawn_seconds") / difficultyMultiplier(d, p.day));
 }
@@ -366,8 +507,11 @@ void DaySession::spawn() {
     // Start with one spoon per preferred type. Extra workload has a strict daily budget.
     const int baseTypes = std::min(kind.minTypes, static_cast<int>(available.size()));
     const int typeLimit = std::min(kind.maxTypes, static_cast<int>(available.size()));
+    // Thêm vài muỗng ngẫu nhiên để đơn có lúc 2-3 muỗng một loại ngay từ đầu; ngày càng cao càng có thể nhiều hơn.
+    const int extraMax = std::min(2, 1 + (result_.day - 1) / 3);
+    const int extra = std::uniform_int_distribution<int>(0, extraMax)(random_);
     const int budget = std::min(capacity(), static_cast<int>(std::floor(
-        baseTypes * difficultyMultiplier(data_, result_.day) + .0001f)));
+        baseTypes * difficultyMultiplier(data_, result_.day) + .0001f)) + extra);
     int types = baseTypes;
     for (int i = 0; i < types; ++i) c.order.recipe[available[static_cast<std::size_t>(i)]] = 1;
     for (int amount = baseTypes; amount < budget; ++amount) {
@@ -404,11 +548,17 @@ void DaySession::update(float dt) {
         std::remove_if(customers_.begin(), customers_.end(), [](const auto &c) { return c.remaining <= 0; }),
         customers_.end());
     result_.left += static_cast<int>(old - customers_.size());
+    if (old != customers_.size()) combo_ = 0;
     if (remaining_ <= 0) {
         finish();
         return;
     }
-    spawnTimer_ -= dt;
+    const bool inRush = remaining_ <= rushBegin_ && remaining_ > rushEnd_;
+    if (rushActive_ && !inRush) rushFinished_ = true;
+    rushActive_ = inRush;
+    // Giờ cao điểm: khách đến dày hơn (giới hạn vẫn là số chỗ chờ).
+    const float speedUp = rushActive_ ? data_.numberOr("rush_spawn_factor", 1.8f) : 1.f;
+    spawnTimer_ -= dt * speedUp;
     if (spawnTimer_ <= 0) {
         spawn();
         spawnTimer_ = std::max(data_.number("spawn_min_seconds"),
@@ -418,16 +568,55 @@ void DaySession::update(float dt) {
 Receipt DaySession::serve(std::size_t index, const Bowl &bowl) {
     if (ended_ || index >= customers_.size() || !bowl.mixed)
         return {};
-    const auto receipt = EconomySystem::score(data_, progress_, customers_[index], bowl);
+    auto receipt = EconomySystem::score(data_, progress_, customers_[index], bowl);
+    const bool special = data_.customers.at(customers_[index].kind).special;
+    // Combo: các đơn từ 4 sao liên tiếp; bỏ khách hoặc đơn dưới 4 sao sẽ ngắt chuỗi.
+    combo_ = receipt.stars() >= 4 ? combo_ + 1 : 0;
+    receipt.combo = combo_;
+    receipt.rush = rushActive_;
+    if (!special) {
+        const float step = data_.numberOr("combo_step", .04f);
+        const int maxSteps = static_cast<int>(data_.numberOr("combo_max", 8.f));
+        if (combo_ >= 2)
+            receipt.comboBonus = static_cast<int>(std::round(static_cast<float>(customers_[index].order.price) * step *
+                                     static_cast<float>(std::min(combo_ - 1, maxSteps)) / 100.f)) * 100;
+        if (rushActive_)
+            receipt.rushBonus = static_cast<int>(std::round(static_cast<float>(receipt.base) *
+                                     data_.numberOr("rush_bonus", .2f) / 100.f)) * 100;
+        receipt.tip += receipt.comboBonus + receipt.rushBonus;
+    }
     result_.revenue += receipt.base;
     result_.tips += receipt.tip;
+    result_.comboBonus += receipt.comboBonus;
+    result_.rushBonus += receipt.rushBonus;
+    result_.bestCombo = std::max(result_.bestCombo, combo_);
     ++result_.served;
     result_.scoreSum += receipt.score;
+    if (receipt.stars() == 5) { ++result_.fiveStars; ++progress_.fiveStars; }
+    if (rushActive_) { ++result_.rushServed; ++progress_.rushServed; }
+    if (receipt.speed >= .5f) ++result_.fastServed;
+    result_.perfectMixes += bowl.perfectHits;
+    progress_.perfectMixes += bowl.perfectHits;
+    progress_.bestCombo = std::max(progress_.bestCombo, combo_);
     progress_.money += receipt.base + receipt.tip;
     progress_.lifetime += receipt.base + receipt.tip;
     ++progress_.served;
-    ReviewSystem::record(progress_, receipt, result_.day);
+    for (auto &goal : result_.goals) {
+        if (goal.id == "serve") ++goal.progress;
+        else if (goal.id == "stars" && receipt.stars() >= 4) ++goal.progress;
+        else if (goal.id == "tips") goal.progress += receipt.tip;
+        else if (goal.id == "combo") goal.progress = std::max(goal.progress, combo_);
+        else if (goal.id == "perfect") goal.progress += bowl.perfectHits;
+        else if (goal.id == "fast" && receipt.speed >= .5f) ++goal.progress;
+    }
+    // Only some guests post online; keep this independent of order/spawn randomness.
+    if (std::bernoulli_distribution(.4)(reviewRandom_))
+        ReviewSystem::record(progress_, receipt, result_.day);
     customers_.erase(customers_.begin() + static_cast<std::ptrdiff_t>(index));
+    for (auto &id : AchievementSystem::check(data_, progress_)) {
+        result_.newAchievements.push_back(id);
+        unlockedQueue_.push_back(std::move(id));
+    }
     return receipt;
 }
 void DaySession::finish() {
@@ -438,7 +627,26 @@ void DaySession::finish() {
     remaining_ = 0;
     result_.left += static_cast<int>(customers_.size());
     customers_.clear();
+    combo_ = 0;
+    rushActive_ = false;
     progress_.bestRating = std::max(progress_.bestRating, result_.rating());
+    result_.perfectDay = result_.left == 0 && result_.served >= 3 && result_.rating() >= 4.5f;
+    if (result_.perfectDay) ++progress_.perfectDays;
+    // Nhiệm vụ "không ai bỏ về" chỉ chốt được khi hết ngày.
+    for (auto &goal : result_.goals)
+        if (goal.id == "nolose" && result_.left == 0 && result_.served >= 3) goal.progress = 1;
+    for (const auto &goal : result_.goals)
+        if (goal.done()) {
+            result_.goalBonus += goal.reward;
+            ++result_.goalsDone;
+        }
+    progress_.money += result_.goalBonus;
+    progress_.lifetime += result_.goalBonus;
+    progress_.goalsDone += result_.goalsDone;
+    for (auto &id : AchievementSystem::check(data_, progress_)) {
+        result_.newAchievements.push_back(id);
+        unlockedQueue_.push_back(std::move(id));
+    }
     ++progress_.day;
 }
 std::string moneyText(int amount) {
@@ -446,5 +654,32 @@ std::string moneyText(int amount) {
     for (int i = static_cast<int>(text.size()) - 3; i > 0; i -= 3)
         text.insert(static_cast<std::size_t>(i), ".");
     return text + " đ";
+}
+std::string goalText(const DayGoal &g) {
+    const auto n = std::to_string(g.target);
+    if (g.id == "serve") return "Phục vụ " + n + " khách";
+    if (g.id == "stars") return "Giao " + n + " đơn từ 4 sao trở lên";
+    if (g.id == "tips") return "Kiếm " + moneyText(g.target) + " tiền tip";
+    if (g.id == "combo") return "Đạt combo x" + n;
+    if (g.id == "perfect") return "Trộn trúng Perfect " + n + " lần";
+    if (g.id == "fast") return "Giao nhanh " + n + " đơn (khách còn hơn nửa kiên nhẫn)";
+    if (g.id == "nolose") return "Không để khách nào bỏ về (ít nhất 3 khách)";
+    return g.text;
+}
+std::string goalShort(const DayGoal &g) {
+    if (g.id == "serve") return "Phục vụ";
+    if (g.id == "stars") return "Đơn 4 sao+";
+    if (g.id == "tips") return "Tiền tip";
+    if (g.id == "combo") return "Combo";
+    if (g.id == "perfect") return "Perfect";
+    if (g.id == "fast") return "Giao nhanh";
+    if (g.id == "nolose") return "Không bỏ về";
+    return g.text;
+}
+std::string goalProgressText(const DayGoal &g) {
+    if (g.id == "tips")
+        return std::to_string(std::min(g.progress, g.target) / 1000) + "k/" + std::to_string(g.target / 1000) + "k";
+    if (g.id == "nolose") return g.done() ? "Đạt" : "";
+    return std::to_string(std::min(g.progress, g.target)) + "/" + std::to_string(g.target);
 }
 } // namespace tiem

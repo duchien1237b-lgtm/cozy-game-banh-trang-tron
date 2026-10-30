@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 
 namespace {
@@ -72,6 +73,20 @@ int main(int argc, char **argv) {
         require(rejected, "Negative width accepted");
 
         const tiem::GameData data(root);
+        const std::map<std::string, std::string> happyVoices = {
+            {"student", "child"}, {"college", "child"}, {"schoolgirl", "child"},
+            {"auntie", "female"}, {"office", "female"}, {"grandma", "female"},
+            {"special_guest", "female"}, {"uncle", "oldman"},
+            {"courier", "man"}, {"mechanic", "man"}, {"photographer", "man"}
+        };
+        for (const auto &kind : data.customers)
+            require(kind.happySound() == "customer_happy_" + happyVoices.at(kind.id),
+                    "Wrong happy voice for customer");
+        tiem::CustomerKind voicePriority;
+        voicePriority.child = voicePriority.femaleVoice = voicePriority.olderAdult = true;
+        require(voicePriority.happySound() == "customer_happy_child", "Child voice must override gender");
+        voicePriority.child = false;
+        require(voicePriority.happySound() == "customer_happy_female", "Older women must retain female voice");
         auto progress = tiem::Progress::fresh(data);
         require(data.toppings.size() == 13 && progress.unlocked.size() == 5, "Wrong initial ingredients");
         require(data.customers.size() == 11 && data.upgrades.size() == 8, "Missing content");
@@ -113,14 +128,13 @@ int main(int argc, char **argv) {
                     int total = 0;
                     for (const auto &item : guest.order.recipe) {
                         total += item.second;
-                        if (dayNumber == 1) require(item.second == 1, "Day one should only request one spoon per type");
                     }
-                    require(total >= previousTotal && total <= static_cast<int>(std::floor(kind.minTypes * 1.65f + .0001f)) &&
-                            total <= session.capacity(), "Order workload decreased or exceeded the 65 percent cap");
+                    require(total >= kind.minTypes && total <= static_cast<int>(std::floor(kind.minTypes * 1.65f + .0001f)) + 2 &&
+                            total <= session.capacity(), "Order workload below minimum or exceeded the cap plus random extra");
                     require(guest.patience <= previousPatience + .0001f &&
                             guest.patience >= data.number("patience_seconds") * kind.patienceFactor / 1.65f - .001f,
                             "Patience scaling is not monotonic or exceeds the difficulty cap");
-                    if (dayNumber == 1) require(total == kind.minTypes &&
+                    if (dayNumber == 1) require(total <= kind.minTypes + 1 &&
                             std::abs(guest.patience - 84.f * kind.patienceFactor) < .001f, "Day one is not easier");
                     if (dayNumber == 14) { cappedRecipe = guest.order.recipe; cappedPatience = guest.patience; }
                     if (dayNumber > 14) require(guest.order.recipe == cappedRecipe && guest.patience == cappedPatience,
@@ -154,6 +168,23 @@ int main(int argc, char **argv) {
         auto receipt = tiem::EconomySystem::score(data, progress, customer, bowl);
         require(std::abs(receipt.score - 1) < .0001f && receipt.base == 20000 && receipt.tip == 3600,
                 "Perfect recipe payout wrong");
+        // Operator overloading: so khớp tô với đơn, so sánh mục tiêu ngày và in hóa đơn.
+        require(bowl == customer.order && !(bowl != customer.order), "operator== rejected an exact bowl");
+        {
+            tiem::Bowl missing = bowl, extra = bowl, empty;
+            missing.portions.pop_back();
+            extra.portions.push_back("muoi_tom");
+            require(missing != customer.order && extra != customer.order && empty != customer.order,
+                    "operator== accepted a wrong bowl");
+            tiem::DayGoal easy, hard;
+            easy.reward = 1000; hard.reward = 5000;
+            require(easy < hard && !(hard < easy), "DayGoal operator< ordering wrong");
+            std::ostringstream text;
+            text << receipt;
+            require(text.str().find("Công thức 100%") != std::string::npos &&
+                        text.str().find("Tốc độ 100%") != std::string::npos,
+                    "Receipt operator<< output wrong");
+        }
         customer.remaining = 30;
         auto slower = tiem::EconomySystem::score(data, progress, customer, bowl);
         require(std::abs(slower.score - .95f) < .0001f, "Speed weight must be 10 percent");
@@ -444,11 +475,37 @@ int main(int argc, char **argv) {
         require(day.result().served == 1 && dailyProgress.served == 1 && day.customers().empty(),
                 "Sale did not remove customer or record stats");
         require(dailyProgress.money == initialMoney + sale.base + sale.tip, "Wallet did not receive sale");
-        require(dailyProgress.reviews.size() == 1 && dailyProgress.reviews.front().stars == sale.stars(),
-                "Valid sale did not generate exactly one online review");
+        require(dailyProgress.reviews.size() <= 1 &&
+                    (dailyProgress.reviews.empty() || dailyProgress.reviews.front().stars == sale.stars()),
+                "Optional online review has the wrong sale rating");
+        const auto reviewCount = dailyProgress.reviews.size();
         const int paid = dailyProgress.money;
-        require(day.serve(0, exact).base == 0 && dailyProgress.money == paid && dailyProgress.reviews.size() == 1,
+        require(day.serve(0, exact).base == 0 && dailyProgress.money == paid && dailyProgress.reviews.size() == reviewCount,
                 "Could pay or review same customer twice");
+        int onlinePostsAfterSales = 0;
+        for (unsigned seed = 0; seed < 200; ++seed) {
+            auto occasional = tiem::Progress::fresh(data);
+            tiem::DaySession session(data, occasional, seed);
+            tiem::Bowl dish;
+            dish.mixQuality = dish.paperQuality = 1;
+            for (const auto &item : session.customers().front().order.recipe)
+                for (int n = 0; n < item.second; ++n) dish.add(item.first, session.capacity());
+            dish.mixed = true;
+            const auto receiptForPost = session.serve(0, dish);
+            require(occasional.served == 1 && session.result().served == 1 && receiptForPost.base > 0,
+                    "Skipping an online review must not skip the sale or its stats");
+            require(occasional.reviews.size() <= 1 &&
+                        (occasional.reviews.empty() || occasional.reviews.front().stars == receiptForPost.stars()),
+                    "Online post must belong to its completed sale");
+            onlinePostsAfterSales += static_cast<int>(occasional.reviews.size());
+            const auto count = occasional.reviews.size();
+            const auto nextId = occasional.nextReviewId;
+            session.serve(0, dish);
+            require(occasional.reviews.size() == count && occasional.nextReviewId == nextId,
+                    "An invalid duplicate sale must not create an online post");
+        }
+        require(onlinePostsAfterSales >= 50 && onlinePostsAfterSales <= 110,
+                "Online reviews should occur for roughly 40% of customers, not every sale");
         for (int i = 0; i < 50; ++i)
             day.update(.5f);
         require(!day.customers().empty(), "No customer spawned during day");
@@ -669,6 +726,26 @@ int main(int argc, char **argv) {
         stack.pop();
         stack.applyPendingChanges();
         require(stack.empty(), "Pop empty stack is not safe");
+        {
+            // Quà hằng ngày: nhận một lần mỗi ngày, chuỗi liên tiếp tăng, bỏ ngày thì về mốc đầu.
+            auto p = tiem::Progress::fresh(data);
+            const std::int64_t d0 = 20000;
+            require(tiem::DailyReward::canClaim(p, d0), "Fresh save cannot claim daily reward");
+            const int first = tiem::DailyReward::claim(data, p, d0);
+            require(first > 0, "Daily reward gave nothing");
+            require(tiem::DailyReward::claim(data, p, d0) == 0, "Daily reward claimed twice in a day");
+            require(!tiem::DailyReward::canClaim(p, d0), "Reward claimable again same day");
+            require(tiem::DailyReward::canClaim(p, d0 + 1), "Reward not claimable next day");
+            require(tiem::DailyReward::claim(data, p, d0 + 1) >= first, "Streak reward decreased");
+            require(tiem::DailyReward::nextIndex(p, d0 + 10) == 0, "Missed days did not reset streak");
+            // Mục tiêu mỗi ngày luôn có và có thưởng; thành tựu chỉ mở một lần.
+            const auto goals = tiem::DaySession::makeGoals(data, 3);
+            require(!goals.empty(), "No daily goals");
+            for (const auto &g : goals) require(g.target > 0 && g.reward > 0, "Invalid daily goal");
+            auto q = tiem::Progress::fresh(data);
+            tiem::AchievementSystem::check(data, q);
+            require(tiem::AchievementSystem::check(data, q).empty(), "Achievements unlocked twice");
+        }
         std::cout << "PASS: data, recipe scoring, upgrades, paper, mixing, customers, day loop, save "
                      "recovery, UTF-8, input and state lifetime\n";
         return 0;

@@ -13,7 +13,7 @@ bool background(sf::RenderTarget &, ResourceManager &, const std::string &, sf::
 void ingredient(sf::RenderTarget &, ResourceManager &, const Topping &, sf::Vector2f, float scale = 1.f, float angle = 0.f);
 void customer(sf::RenderTarget &, ResourceManager &, const CustomerKind &, sf::Vector2f, float mood = 1.f, float scale = 1.f);
 void bowl(sf::RenderTarget &, ResourceManager &, const GameData &, const Bowl &, sf::Vector2f, float scale,
-          bool highlight = false);
+          bool highlight = false, bool toppingsComplete = false);
 void star(sf::RenderTarget &, sf::Vector2f, float radius, sf::Color);
 void shopBackground(sf::RenderTarget &, const GameData &, const Progress &, float time);
 } // namespace tiem::ui

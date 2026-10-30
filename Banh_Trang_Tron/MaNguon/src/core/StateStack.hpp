@@ -24,6 +24,10 @@ class StateStack {
         return entries_.size();
     }
     std::optional<StateID> top() const;
+    // Tăng mỗi khi đổi màn (replace/clear) để Game chạy hiệu ứng chuyển cảnh.
+    unsigned sceneChanges() const {
+        return sceneChanges_;
+    }
 
   private:
     enum class Action { Push, Pop, Replace, Clear };
@@ -39,5 +43,6 @@ class StateStack {
     std::map<StateID, Factory> factories_;
     std::vector<Entry> entries_;
     std::vector<Change> pending_;
+    unsigned sceneChanges_{};
 };
 } // namespace tiem

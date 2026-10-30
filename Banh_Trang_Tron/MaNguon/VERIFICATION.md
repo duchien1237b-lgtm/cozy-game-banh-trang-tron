@@ -155,3 +155,32 @@ Build Release và CTest (1/1) đạt. Preview --sfx-test kiểm tra thao tác x�
 Build Release đạt sau khi danh sách âm thanh trong công cụ preview được cập nhật theo AudioManager hiện tại. CTest đạt 1/1. Chạy preview --sfx-test trực tiếp với assets/ và data/ của bộ chơi sau khi xóa tài nguyên thừa: thao tác xé, thanh lực, hủy lượt giữ, icon/pop, ba mức trộn, giao món, menu, hướng dẫn và xác nhận chơi lại đều đạt. Preview dùng thư mục lưu kiểm tra riêng và OpenAL null.
 
 Giữ mã nguồn, tests, tools/PreviewUi.cpp, công cụ tạo audio, script build, assets/data cần thiết và giấy phép. Xóa build cache/công cụ tạm/ảnh kiểm tra sau khi kiểm tra xong. SHA256SUMS.txt được làm mới theo các file còn lại.
+
+## Kiểm tra bản nâng cấp UI/UX
+
+- `tiem_tests` (logic lõi, lưu/tải, combo, quà hằng ngày, mục tiêu, thành tựu): PASS trên Linux.
+- Chụp màn hình thật (Xvfb) các màn: menu, quà hằng ngày, chuẩn bị đầu ngày, hướng dẫn, chơi, thẻ đánh giá, tạm dừng, trợ giúp, tổng kết, cửa hàng.
+- `GocNhoBanhTrang.exe` được biên dịch chéo bằng mingw-w64 (SFML 2.6.2 tĩnh) nhưng CHƯA chạy thử trên Windows thật; chế độ toàn màn hình F11 cũng chưa kiểm tra trên Windows.
+
+## Kiểm tra khôi phục giọng trên bản game cập nhật
+
+Build Release đạt với code hiện tại. CTest đạt 1/1, gồm đối chiếu 11 khách và ưu tiên trẻ em trước giới tính. Preview --happy-test giải mã đủ 4 MP3 và kiểm tra ánh xạ phát âm thanh thực tế qua AudioManager cho cả 11 khách: Minh dùng childen_happy, Bà Tư dùng female_happy. Chạy với OpenAL null và thư mục save thử riêng, chưa nghe thử bằng loa. Những thay đổi gameplay có sẵn được build từ source mới. File tiếng vui chung cũ được xóa ở assets của bản chạy và mã nguồn; tiếng trộn trong mix/ được giữ. Bộ chạy và ZIP được cập nhật đồng bộ, tiến trình thật không bị đặt lại.
+
+## Kiểm tra icon góc menu
+
+Build Release và CTest (1/1) đạt. Preview --menu-icons tải hai PNG, chụp menu trước/sau nhận quà và trạng thái hover, mở/đóng đúng DailyReward ở góc trái và Achievements ở góc phải, kiểm tra vùng bấm hai nút cũ không còn hoạt động và popup chơi lại chặn các nút bên dưới. Đã xem ảnh bố cục ở 1280x720. Kiểm tra dùng save riêng; không thay tiến trình thật.
+
+
+## Điều chỉnh icon và đánh giá online
+
+Hai icon góc menu được thu nhỏ khoảng 20%, bỏ nền tròn và bóng nền; giữ nhãn, dấu quà chưa nhận và số thành tựu. Mỗi lượt phục vụ hợp lệ có xác suất 40% tạo đánh giá online, dùng bộ sinh ngẫu nhiên riêng để không thay đổi chuỗi khách/đơn. Giữ nguyên đánh giá và phản hồi đã lưu. Build Release, CTest 1/1 (gồm 200 lượt phục vụ để kiểm tra tần suất và chống đánh giá trùng), preview --menu-icons đạt; đã xem ảnh menu 1280x720. Kiểm tra dùng save riêng.
+
+
+## Kiểm tra tô remodel
+
+Build Release thành công, CTest 1/1 đạt. Preview --bowls-only tải đủ hai PNG mới và chụp bốn trạng thái: bánh vừa xé, đang thêm topping, đủ topping trước trộn, trộn xong. Đã xem ảnh để kiểm tra tỉ lệ, nền trong suốt và không chồng lớp topping lên model mới. Bộ chọn hình dùng cùng hàm cho tô trên bàn, tô trong màn trộn và khi kéo giao khách. Kiểm tra dùng save riêng.
+
+
+## Dọn ảnh trùng 2026-10-30
+
+Xóa 118 bản sao ảnh không dùng (12.457.994 byte) và 19 thư mục ảnh rỗng. Đối chiếu SHA-256 trước khi xóa: ảnh ngoài cozy trùng bản chuẩn code đang nạp; bộ tô cũ trong cozy/bowl_remodel trùng bộ mới ở images/bowl_remodel. Giữ mã nguồn, tests, tools, assets cần thiết, âm thanh dự phòng, giấy phép và Git. Đã xác minh các file còn lại theo manifest cũ và toàn bộ assets mã nguồn có bản chạy tương ứng cùng hash. File chạy không thay đổi. Làm mới manifest và ZIP sau khi dọn.

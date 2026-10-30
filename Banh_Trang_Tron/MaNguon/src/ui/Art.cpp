@@ -144,13 +144,15 @@ void customer(sf::RenderTarget &target, ResourceManager &resources, const Custom
     target.draw(smile);
 }
 void bowl(sf::RenderTarget &target, ResourceManager &resources, const GameData &data, const Bowl &bowlData, sf::Vector2f p, float scale,
-          bool highlight) {
+          bool highlight, bool toppingsComplete) {
+    // Keep individual ingredients while filling; completed stages use the supplied full-bowl art.
     const bool hasToppings = !bowlData.portions.empty();
-    const std::string artwork = hasToppings
-        ? (bowlData.mixed ? "bowl_remodel/bowls/bowl_topping_after_mix"
-                          : "bowl_remodel/bowls/bowl_topping_before_mix")
-        : "bowls/bowl_empty";
-    const bool hasBowl = image(target, resources, artwork,
+    const auto *remodel = hasToppings && (bowlData.mixed || toppingsComplete)
+        ? resources.texture(bowlData.mixed ? "assets/images/bowl_remodel/bowl_topping_after_mix.png"
+                                          : "assets/images/bowl_remodel/bowl_topping_before_mix.png")
+        : nullptr;
+    const std::string artwork = "bowls/bowl_empty";
+    const bool hasBowl = remodel || image(target, resources, artwork,
                               {p.x - 145 * scale, p.y - 145 * scale, 290 * scale, 290 * scale});
     if (highlight) {
         const float radius = (hasToppings ? 148.f : 130.f) * scale;
@@ -163,9 +165,16 @@ void bowl(sf::RenderTarget &target, ResourceManager &resources, const GameData &
         ring.setOutlineThickness(3 * scale);
         target.draw(ring);
     }
-    // Both new sprites already contain the paper, sauce and toppings.
-    if (hasBowl && hasToppings)
+    if (remodel) {
+        const auto size = remodel->getSize();
+        sf::Sprite sprite(*remodel);
+        sprite.setOrigin(size.x * .5f, size.y * .5f);
+        const float fit = 290.f * scale / static_cast<float>(std::max(size.x, size.y));
+        sprite.setScale(fit, fit);
+        sprite.setPosition(p);
+        target.draw(sprite);
         return;
+    }
     if (!hasBowl) {
     circle(target, p + sf::Vector2f(0, 8 * scale), 125 * scale, {194, 164, 125}, {1, .78f});
     circle(target, p, 126 * scale, highlight ? sf::Color(109, 154, 95) : sf::Color(218, 196, 163), {1, .78f});
@@ -181,12 +190,16 @@ void bowl(sf::RenderTarget &target, ResourceManager &resources, const GameData &
                    {33 * scale, 6 * scale}, a * 57.3f, {234, 183, 115});
         }
     }
+    // Sau khi trộn: lớp sốt mỏng và các topping dồn lại gần nhau hơn.
+    if (bowlData.mixed && hasToppings)
+        image(target, resources, "bowls/bowl_mixed_base", {p.x - 145 * scale, p.y - 145 * scale, 290 * scale, 290 * scale});
+    const float spread = bowlData.mixed ? .85f : 1.f;
     for (std::size_t i = 0; i < bowlData.portions.size(); ++i) {
-        const float a = static_cast<float>(i) * 2.39996f, r = 17.f + std::sqrt(static_cast<float>(i)) * 15;
+        const float a = static_cast<float>(i) * 2.39996f, r = (17.f + std::sqrt(static_cast<float>(i)) * 15) * spread;
         ingredient(target, resources, data.topping(bowlData.portions[i]),
                    p + sf::Vector2f(std::cos(a) * std::min(r, 87.f) * scale,
                                     std::sin(a) * std::min(r, 87.f) * .7f * scale),
-                   scale * .85f, a * 57.3f);
+                   scale * .85f, a * 57.3f + (bowlData.mixed ? static_cast<float>(i) * 37.f : 0.f));
     }
 }
 void star(sf::RenderTarget &target, sf::Vector2f p, float r, sf::Color c) {

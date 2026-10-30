@@ -5,6 +5,7 @@
 #include "states/ManagementState.hpp"
 #include "states/OverlayState.hpp"
 #include "states/PlayingState.hpp"
+#include "states/RewardState.hpp"
 #include "states/ReviewsState.hpp"
 #include <algorithm>
 
@@ -15,7 +16,8 @@ Game::Game()
               sf::ContextSettings(0, 0, 4)),
       view_(sf::FloatRect(0, 0, 1280, 720)), resources_(root_, config_.font), services_(root_),
       audio_(resources_, root_),
-      context_{window_, resources_, config_, [this] { audio_.play("ui_click"); }, &services_, &audio_} {
+      context_{window_, resources_, config_, [this] { audio_.play("ui_click"); }, &services_, &audio_,
+               [this](bool on) { applyWindowMode(on); }} {
     window_.setFramerateLimit(config_.fpsLimit);
     window_.setKeyRepeatEnabled(false);
     if (const auto *texture = resources_.texture("assets/images/cozy/ui/game_icon.png")) {
@@ -29,6 +31,28 @@ Game::Game()
     registerStates();
     states_.push(StateID::MainMenu);
     states_.applyPendingChanges();
+    if (services_.progress.fullscreen)
+        applyWindowMode(true);
+}
+
+void Game::applyWindowMode(bool fullscreen) {
+    if (fullscreen == fullscreen_)
+        return;
+    fullscreen_ = fullscreen;
+    services_.progress.fullscreen = fullscreen;
+    const sf::ContextSettings settings(0, 0, 4);
+    if (fullscreen)
+        window_.create(sf::VideoMode::getDesktopMode(), utf8(config_.title), sf::Style::Fullscreen, settings);
+    else
+        window_.create(sf::VideoMode(config_.width, config_.height), utf8(config_.title), sf::Style::Default, settings);
+    window_.setFramerateLimit(config_.fpsLimit);
+    window_.setKeyRepeatEnabled(false);
+    if (const auto *texture = resources_.texture("assets/images/cozy/ui/game_icon.png")) {
+        const sf::Image icon = texture->copyToImage();
+        const auto size = icon.getSize();
+        window_.setIcon(size.x, size.y, icon.getPixelsPtr());
+    }
+    resize(window_.getSize().x, window_.getSize().y);
 }
 
 void Game::registerStates() {
@@ -38,6 +62,10 @@ void Game::registerStates() {
                             [this] { return std::make_unique<PlayingState>(states_, context_); });
     states_.registerFactory(StateID::Reviews,
                             [this] { return std::make_unique<ReviewsState>(states_, context_); });
+    states_.registerFactory(StateID::Achievements,
+                            [this] { return std::make_unique<AchievementsState>(states_, context_); });
+    states_.registerFactory(StateID::DailyReward,
+                            [this] { return std::make_unique<DailyRewardState>(states_, context_); });
     for (const auto id : {StateID::Pause, StateID::Settings})
         states_.registerFactory(id,
                                 [this, id] { return std::make_unique<OverlayState>(states_, context_, id); });
@@ -84,6 +112,12 @@ void Game::handleEvents() {
         }
         if (event.type == sf::Event::Resized)
             resize(event.size.width, event.size.height);
+        // F11 bật/tắt toàn màn hình ở mọi màn hình.
+        if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F11) {
+            applyWindowMode(!fullscreen_);
+            services_.save();
+            continue;
+        }
         if (event.type == sf::Event::LostFocus)
             focused_ = false;
         if (event.type == sf::Event::GainedFocus)
@@ -96,6 +130,8 @@ void Game::handleEvents() {
 
 void Game::run() {
     sf::Clock clock;
+    unsigned lastScene = states_.sceneChanges();
+    float fade = 1.f;
     while (window_.isOpen()) {
         // Giới hạn bước mô phỏng sau khi kéo cửa sổ hoặc bị hệ điều hành ngắt lâu.
         const float dt = std::min(clock.restart().asSeconds(), 0.25f);
@@ -112,6 +148,17 @@ void Game::run() {
         window_.clear({46, 36, 30});
         window_.setView(view_);
         states_.render(window_);
+        // Chuyển cảnh: màn mới hiện dần từ tối thay vì cắt cứng.
+        if (states_.sceneChanges() != lastScene) {
+            lastScene = states_.sceneChanges();
+            fade = 1.f;
+        }
+        if (fade > 0.f) {
+            fade = std::max(0.f, fade - dt * 3.2f);
+            sf::RectangleShape cover({1280, 720});
+            cover.setFillColor({30, 22, 16, static_cast<sf::Uint8>(255.f * fade * fade)});
+            window_.draw(cover);
+        }
         window_.display();
     }
     services_.save();

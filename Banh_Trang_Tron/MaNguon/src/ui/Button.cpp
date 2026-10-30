@@ -54,6 +54,27 @@ void Button::update(float dt) {
 void Button::render(sf::RenderTarget &target) const {
     const Theme theme;
     auto rect = bounds_;
+    if (!iconPath_.empty()) {
+        rect.top += pressed_ ? 3.f : lift_;
+        const float side = std::min(rect.width, rect.height - 22.f);
+        const sf::Vector2f center{rect.left + rect.width * .5f, rect.top + side * .5f};
+        const auto *icon = resources_ ? resources_->texture(iconPath_) : nullptr;
+        if (icon) {
+            const auto size = icon->getSize();
+            const float scale = (side - 10.f) / static_cast<float>(std::max(size.x, size.y));
+            sf::Sprite sprite(*icon);
+            sprite.setOrigin(size.x * .5f, size.y * .5f);
+            sprite.setScale(scale, scale);
+            sprite.setPosition(center);
+            sprite.setColor({255, 255, 255, static_cast<sf::Uint8>(enabled_ ? 255 : 130)});
+            target.draw(sprite);
+        }
+        // The caption is inside the hit area and remains legible over the street background.
+        panel(target, {rect.left, rect.top + side + 3, rect.width, 20}, {255, 250, 229, 235}, 9);
+        text(target, font_, label_, 13, {center.x, rect.top + side + 13},
+             enabled_ ? theme.ink : theme.muted, true);
+        return;
+    }
     panel(target, {rect.left, rect.top + 5.f, rect.width, rect.height}, {199, 177, 147}, 12.f);
     rect.top += pressed_ ? 3.f : lift_;
     auto color = theme.green;
