@@ -1,7 +1,6 @@
 #include "core/StateStack.hpp"
 #include <stdexcept>
 #include <utility>
-
 namespace tiem {
 void StateStack::registerFactory(StateID id, Factory factory) {
     factories_[id] = std::move(factory);
@@ -52,7 +51,6 @@ void StateStack::applyPendingChanges() {
         }
     }
 }
-
 void StateStack::handleEvent(const sf::Event &event, Pointer mouse) {
     for (auto it = entries_.rbegin(); it != entries_.rend(); ++it)
         if (!it->state->handleEvent(event, mouse))
