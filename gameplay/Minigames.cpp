@@ -88,11 +88,10 @@ std::optional<float> MixingMinigame::hit() {
     const float value = data_.balance.at("mix_scores").at(key).get<float>();
     ++hits_;
     sum_ += value;
-    cooldown_ = data_.number("mix_hit_cooldown");
-    // Alternate distant sides; the next zone is always entirely inside the timing bar.
+    cooldown_ = data_.number("mix_hit_cooldown")
     const float margin = width_ * .5f + .02f;
     const float fraction = hits_ % 2 ? .18f : .82f;
     target_ = margin + (1.f - 2.f * margin) * fraction;
     return value;
 }
-} // namespace tiem
+}
