@@ -52,7 +52,7 @@ bool validReply(const std::string &text) {
     }
     return visible;
 }
-} // namespace
+}
 GameData::GameData(const std::filesystem::path &root) {
     balance = read(root / "data/balance.json");
     std::set<std::string> ids;
@@ -666,4 +666,4 @@ std::string goalProgressText(const DayGoal &g) {
     if (g.id == "nolose") return g.done() ? "Đạt" : "";
     return std::to_string(std::min(g.progress, g.target)) + "/" + std::to_string(g.target);
 }
-} // namespace tiem
+}
