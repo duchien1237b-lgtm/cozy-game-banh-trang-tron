@@ -1,0 +1,4 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/MaNguon",
+    "CodeGPT.apiKey": "CodeGPT Plus Beta"
+}

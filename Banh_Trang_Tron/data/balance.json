@@ -1,0 +1,43 @@
+{
+  "day_seconds": 180,
+  "initial_money": 30000,
+  "queue_slots": 3,
+  "queue_max": 4,
+  "spawn_seconds": 22,
+  "spawn_min_seconds": 7,
+  "patience_seconds": 84,
+  "patience_min_seconds": 45,
+  "order_initial_types": 4,
+  "order_max_types": 6,
+  "order_max_quantity": 3,
+  "bowl_capacity": 24,
+  "bowl_capacity_per_level": 6,
+  "base_price": 16000,
+  "payment_floor": 0.45,
+  "tip_rate": 0.18,
+  "weights": {
+    "recipe": 0.5,
+    "paper": 0.2,
+    "mix": 0.2,
+    "speed": 0.1
+  },
+  "mix_hits": 3,
+  "mix_speed": 0.64,
+  "mix_speed_max": 1.05,
+  "mix_window": 0.23,
+  "mix_window_max": 0.6,
+  "mix_hit_cooldown": 0.22,
+  "mix_scores": {
+    "perfect": 1,
+    "good": 0.8,
+    "miss": 0.15
+  },
+  "sauce_seconds_per_spoon": 0.6,
+  "feedback_seconds": 1.6,
+  "default_music": 32,
+  "default_sfx": 60,
+  "topping_charge_seconds": 2.4,
+  "paper_stage_seconds": 1.5,
+  "difficulty_step_per_day": 0.05,
+  "difficulty_max_bonus": 0.65
+}

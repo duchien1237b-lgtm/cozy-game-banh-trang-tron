@@ -1,0 +1,190 @@
+{
+  "customers": [
+    {
+      "id": "student",
+      "name": "An",
+      "style": "student",
+      "color": [
+        104,
+        148,
+        152
+      ],
+      "patience_factor": 1.1,
+      "female_voice": false,
+      "order_min_types": 3,
+      "order_max_types": 4,
+      "order_min_quantity": 1,
+      "order_max_quantity": 2
+    },
+    {
+      "id": "college",
+      "name": "Minh",
+      "style": "student",
+      "color": [
+        195,
+        134,
+        95
+      ],
+      "patience_factor": 1,
+      "female_voice": false,
+      "order_min_types": 4,
+      "order_max_types": 5,
+      "order_min_quantity": 1,
+      "order_max_quantity": 3
+    },
+    {
+      "id": "auntie",
+      "name": "Cô Hạnh",
+      "style": "auntie",
+      "color": [
+        169,
+        115,
+        142
+      ],
+      "patience_factor": 1.2,
+      "female_voice": true,
+      "order_min_types": 4,
+      "order_max_types": 5,
+      "order_min_quantity": 1,
+      "order_max_quantity": 2
+    },
+    {
+      "id": "uncle",
+      "name": "Chú Bình",
+      "style": "uncle",
+      "color": [
+        115,
+        142,
+        107
+      ],
+      "patience_factor": 1.15,
+      "female_voice": false,
+      "order_min_types": 5,
+      "order_max_types": 6,
+      "order_min_quantity": 1,
+      "order_max_quantity": 3
+    },
+    {
+      "id": "courier",
+      "name": "Anh shipper",
+      "style": "courier",
+      "color": [
+        79,
+        148,
+        131
+      ],
+      "patience_factor": 0.9,
+      "female_voice": false,
+      "order_min_types": 4,
+      "order_max_types": 5,
+      "order_min_quantity": 1,
+      "order_max_quantity": 3
+    },
+    {
+      "id": "office",
+      "name": "Chị Linh",
+      "style": "office",
+      "color": [
+        128,
+        139,
+        174
+      ],
+      "patience_factor": 1,
+      "female_voice": true,
+      "order_min_types": 3,
+      "order_max_types": 4,
+      "order_min_quantity": 1,
+      "order_max_quantity": 2
+    },
+    {
+      "id": "schoolgirl",
+      "name": "Bé Mai",
+      "style": "schoolgirl",
+      "color": [
+        166,
+        136,
+        185
+      ],
+      "patience_factor": 1.1,
+      "female_voice": true,
+      "is_special": false,
+      "spawn_weight": 1.0,
+      "order_min_types": 3,
+      "order_max_types": 4,
+      "order_min_quantity": 1,
+      "order_max_quantity": 2
+    },
+    {
+      "id": "grandma",
+      "name": "Bà Tư",
+      "style": "grandma",
+      "color": [
+        135,
+        159,
+        122
+      ],
+      "patience_factor": 1.25,
+      "female_voice": true,
+      "is_special": false,
+      "spawn_weight": 1.0,
+      "order_min_types": 3,
+      "order_max_types": 4,
+      "order_min_quantity": 1,
+      "order_max_quantity": 2
+    },
+    {
+      "id": "mechanic",
+      "name": "Anh Khang",
+      "style": "mechanic",
+      "color": [
+        110,
+        143,
+        175
+      ],
+      "patience_factor": 1.0,
+      "female_voice": false,
+      "is_special": false,
+      "spawn_weight": 1.0,
+      "order_min_types": 5,
+      "order_max_types": 6,
+      "order_min_quantity": 1,
+      "order_max_quantity": 3
+    },
+    {
+      "id": "photographer",
+      "name": "Anh Bảo",
+      "style": "photographer",
+      "color": [
+        196,
+        154,
+        89
+      ],
+      "patience_factor": 1.05,
+      "female_voice": false,
+      "is_special": false,
+      "spawn_weight": 1.0,
+      "order_min_types": 4,
+      "order_max_types": 5,
+      "order_min_quantity": 1,
+      "order_max_quantity": 3
+    },
+    {
+      "id": "special_guest",
+      "name": "Chị Dung",
+      "style": "special_guest",
+      "color": [
+        218,
+        174,
+        83
+      ],
+      "patience_factor": 1.2,
+      "female_voice": true,
+      "is_special": true,
+      "spawn_weight": 0.35,
+      "order_min_types": 4,
+      "order_max_types": 6,
+      "order_min_quantity": 1,
+      "order_max_quantity": 3
+    }
+  ]
+}
