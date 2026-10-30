@@ -102,7 +102,6 @@ Pointer Game::mouseFor(const sf::Event &event) const {
         return std::nullopt;
     return window_.mapPixelToCoords(pixel, view_);
 }
-
 void Game::handleEvents() {
     sf::Event event{};
     while (window_.pollEvent(event)) {
@@ -161,4 +160,4 @@ void Game::run() {
     }
     services_.save();
 }
-} // namespace tiem
+}
