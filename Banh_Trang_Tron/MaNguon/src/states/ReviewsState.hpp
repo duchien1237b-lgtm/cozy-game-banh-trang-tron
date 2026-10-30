@@ -23,7 +23,8 @@ class ReviewsState final : public UiState {
     void appendInput(const sf::String &);
     void drawEditor(sf::RenderTarget &);
     std::size_t page_{};
-    bool unansweredOnly_{}, rebuild_{}, inputFocused_{}, selectAll_{};
+    bool unansweredOnly_{}, lowStarsOnly_{}, rebuild_{}, inputFocused_{}, selectAll_{};
+    std::size_t cursor_{};
     std::optional<std::uint64_t> editing_;
     sf::String draft_;
     std::string notice_;

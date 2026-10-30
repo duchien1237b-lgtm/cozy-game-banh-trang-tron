@@ -77,7 +77,7 @@ ReviewsState::ReviewsState(StateStack &stack, AppContext &context) : UiState(sta
 std::vector<const ShopReview *> ReviewsState::filtered() const {
     std::vector<const ShopReview *> result;
     for (auto it = game().progress.reviews.rbegin(); it != game().progress.reviews.rend(); ++it)
-        if (!unansweredOnly_ || it->reply.empty()) result.push_back(&*it);
+        if ((!unansweredOnly_ || it->reply.empty()) && (!lowStarsOnly_ || it->stars <= 2)) result.push_back(&*it);
     return result;
 }
 
@@ -103,6 +103,7 @@ void ReviewsState::rebuildButtons() {
             const std::string reply = suggestions[i].second;
             addButton(suggestions[i].first, {220.f + i * 282.f, 526, 266, 36}, [this, reply] {
                 draft_ = utf8(reply);
+                cursor_ = draft_.getSize();
                 inputFocused_ = true;
                 selectAll_ = false;
                 notice_.clear();
@@ -112,13 +113,22 @@ void ReviewsState::rebuildButtons() {
         return;
     }
     addButton("Đóng", {1056, 61, 145, 44}, [this] { stack_.pop(); });
-    addButton(unansweredOnly_ ? "Tất cả" : "• Tất cả", {680, 110, 170, 33}, [this] {
+    const bool allFilter = !unansweredOnly_ && !lowStarsOnly_;
+    addButton(allFilter ? "• Tất cả" : "Tất cả", {680, 110, 120, 33}, [this] {
         unansweredOnly_ = false;
+        lowStarsOnly_ = false;
         page_ = 0;
         rebuild_ = true;
     });
-    addButton(unansweredOnly_ ? "• Chưa phản hồi" : "Chưa phản hồi", {864, 110, 337, 33}, [this] {
+    addButton(unansweredOnly_ ? "• Chưa phản hồi" : "Chưa phản hồi", {810, 110, 200, 33}, [this] {
         unansweredOnly_ = true;
+        lowStarsOnly_ = false;
+        page_ = 0;
+        rebuild_ = true;
+    });
+    addButton(lowStarsOnly_ ? "• 1-2 sao" : "1-2 sao", {1020, 110, 181, 33}, [this] {
+        lowStarsOnly_ = true;
+        unansweredOnly_ = false;
         page_ = 0;
         rebuild_ = true;
     });
@@ -150,6 +160,7 @@ void ReviewsState::openEditor(std::uint64_t id) {
         return;
     }
     draft_ = utf8(review->reply);
+    cursor_ = draft_.getSize();
     inputFocused_ = true;
     selectAll_ = false;
     notice_.clear();
@@ -164,6 +175,7 @@ void ReviewsState::closeEditor() {
     inputFocused_ = false;
     selectAll_ = false;
     draft_.clear();
+    cursor_ = 0;
     rebuild_ = true;
 }
 
@@ -195,13 +207,17 @@ void ReviewsState::submitReply() {
 void ReviewsState::appendInput(const sf::String &input) {
     if (selectAll_) {
         draft_.clear();
+        cursor_ = 0;
         selectAll_ = false;
     }
+    cursor_ = std::min(cursor_, draft_.getSize());
     for (auto codepoint : input) {
         if (draft_.getSize() >= replyLimit) break;
         if (codepoint == '\n' || codepoint == '\r' || codepoint == '\t') codepoint = ' ';
-        if (codepoint >= 32 && codepoint != 127 && codepoint != 0x2028 && codepoint != 0x2029)
-            draft_ += codepoint;
+        if (codepoint >= 32 && codepoint != 127 && codepoint != 0x2028 && codepoint != 0x2029) {
+            draft_.insert(cursor_, sf::String(codepoint));
+            ++cursor_;
+        }
     }
     blink_ = 0;
     notice_.clear();
@@ -240,11 +256,42 @@ bool ReviewsState::handleEvent(const sf::Event &event, Pointer mouse) {
             else if (event.key.code == sf::Keyboard::V && event.key.control)
                 appendInput(sf::Clipboard::getString());
             else if (event.key.code == sf::Keyboard::BackSpace && !draft_.isEmpty()) {
-                if (selectAll_) draft_.clear();
-                else draft_.erase(draft_.getSize() - 1, 1);
+                if (selectAll_) {
+                    draft_.clear();
+                    cursor_ = 0;
+                } else if (cursor_ > 0) {
+                    draft_.erase(cursor_ - 1, 1);
+                    --cursor_;
+                }
                 selectAll_ = false;
                 blink_ = 0;
                 notice_.clear();
+            } else if (event.key.code == sf::Keyboard::Delete && !draft_.isEmpty()) {
+                if (selectAll_) {
+                    draft_.clear();
+                    cursor_ = 0;
+                } else if (cursor_ < draft_.getSize()) {
+                    draft_.erase(cursor_, 1);
+                }
+                selectAll_ = false;
+                blink_ = 0;
+                notice_.clear();
+            } else if (event.key.code == sf::Keyboard::Left) {
+                if (cursor_ > 0) --cursor_;
+                selectAll_ = false;
+                blink_ = 0;
+            } else if (event.key.code == sf::Keyboard::Right) {
+                if (cursor_ < draft_.getSize()) ++cursor_;
+                selectAll_ = false;
+                blink_ = 0;
+            } else if (event.key.code == sf::Keyboard::Home) {
+                cursor_ = 0;
+                selectAll_ = false;
+                blink_ = 0;
+            } else if (event.key.code == sf::Keyboard::End) {
+                cursor_ = draft_.getSize();
+                selectAll_ = false;
+                blink_ = 0;
             } else if (event.key.code == sf::Keyboard::Enter) submitReply();
         }
         if (editing_ && inputFocused_ && event.type == sf::Event::TextEntered &&
@@ -294,7 +341,11 @@ void ReviewsState::drawEditor(sf::RenderTarget &target) {
               inputFocused_ ? theme.green : sf::Color(203, 185, 156), 12);
     ui::panel(target, inputArea, {255, 254, 247}, 11);
     const auto inputLines = wrap(draft_, font, 18, 810);
-    const std::size_t firstInputLine = inputLines.size() > 5 ? inputLines.size() - 5 : 0;
+    cursor_ = std::min(cursor_, draft_.getSize());
+    const auto caretLines = wrap(draft_.substring(0, cursor_), font, 18, 810);
+    const std::size_t caretRow = caretLines.empty() ? 0 : caretLines.size() - 1;
+    const std::size_t maxFirst = inputLines.size() > 5 ? inputLines.size() - 5 : 0;
+    const std::size_t firstInputLine = std::min(maxFirst, caretRow >= 5 ? caretRow - 4 : 0);
     if (selectAll_ && inputFocused_) {
         for (std::size_t row = 0; row < inputLines.size() - firstInputLine; ++row) {
             sf::Text line(inputLines[firstInputLine + row], font, 18);
@@ -305,11 +356,11 @@ void ReviewsState::drawEditor(sf::RenderTarget &target) {
         ui::text(target, font, "Viết lời cảm ơn, xin lỗi hoặc ghi nhận góp ý của khách…", 18, {235, 383}, theme.muted);
     else paragraph(target, font, draft_, 18, {235, 383}, 810, 23, 5, theme.ink, firstInputLine);
     if (inputFocused_ && !selectAll_ && blink_ < .5f) {
-        const std::size_t row = inputLines.size() - firstInputLine - 1;
-        sf::Text last(inputLines.back(), font, 18);
+        const std::size_t row = caretRow - firstInputLine;
+        sf::Text last(caretLines.empty() ? sf::String() : caretLines.back(), font, 18);
         ui::panel(target, {235 + last.getLocalBounds().width + 2, 381 + row * 23.f, 1.5f, 21}, theme.green, 0);
     }
-    ui::text(target, font, "Enter: lưu • Ctrl+V: dán nội dung • Esc: quay lại", 13, {220, 505}, theme.muted);
+    ui::text(target, font, "Enter: lưu • Mũi tên, Home, End: di chuyển • Ctrl+V: dán • Esc: quay lại", 13, {220, 505}, theme.muted);
     if (!notice_.empty()) ui::text(target, font, notice_, 14, {220, 568}, noticeError_ ? sf::Color(168, 66, 45) : theme.green);
 }
 
@@ -353,11 +404,12 @@ void ReviewsState::render(sf::RenderTarget &target) {
     paragraph(target, font, utf8("Một lời hồi đáp chân thành khiến khách muốn ghé lại."), 17, {88, 530}, 188, 23, 3, theme.green);
     const auto items = filtered();
     if (items.empty()) {
-        ui::text(target, context_.resources.titleFont(), unansweredOnly_ ? "Bạn đã trả lời hết rồi!" : "Tiệm đang chờ những lời nhắn đầu tiên", 27,
+        ui::text(target, context_.resources.titleFont(), unansweredOnly_ ? "Bạn đã trả lời hết rồi!" : lowStarsOnly_ ? "Chưa có đánh giá thấp nào" : "Tiệm đang chờ những lời nhắn đầu tiên", 27,
                  {765, 311}, theme.green, true);
         paragraph(target, font, utf8(unansweredOnly_
                       ? "Khách sẽ rất vui khi biết tiệm đã lắng nghe. Chọn Tất cả để xem lại những cuộc trò chuyện."
-                      : "Hãy mở quán và phục vụ vài phần bánh tráng. Sau trải nghiệm, khách sẽ để lại cảm nhận ở đây."),
+                      : lowStarsOnly_ ? "Khách chưa chấm 1-2 sao nào. Chọn Tất cả để xem mọi đánh giá."
+                      : "Hãy mở quán và phục vụ vài phần bánh tráng. Một số khách sẽ ghé lại trang này để chia sẻ cảm nhận."),
                   19, {450, 357}, 650, 28, 3, theme.muted);
     }
     for (std::size_t row = 0; row < perPage; ++row) {
