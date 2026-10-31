@@ -33,6 +33,7 @@ void ring(sf::RenderTarget &target, sf::FloatRect r, float time, sf::Color color
     shape.setOutlineThickness(3.f);
     target.draw(shape);
 }
+
 } // namespace
 PlayingState::PlayingState(StateStack &stack, AppContext &context)
     : UiState(stack, context),
@@ -51,6 +52,7 @@ PlayingState::PlayingState(StateStack &stack, AppContext &context)
             --page_;
         refreshButtons();
     });
+    
     addButton("Sau", {255, 680, 195, 28}, [this] {
         if ((page_ + 1) * 6 < available_.size())
             ++page_;
@@ -73,6 +75,7 @@ PlayingState::PlayingState(StateStack &stack, AppContext &context)
         game().save();
         say("Đã tắt hướng dẫn. Có thể bật lại trong Cài đặt.");
     });
+    
     skipTutorial_->setResources(context_.resources);
     skipTutorial_->setClickSound(context_.playClick);
     tutorial_ = !game().progress.tutorialDone;
@@ -84,13 +87,16 @@ PlayingState::PlayingState(StateStack &stack, AppContext &context)
 PlayingState::~PlayingState() {
     if (context_.audio) context_.audio->charging(false);
 }
+    
 void PlayingState::say(std::string text) {
     message_ = std::move(text);
     messageAge_ = 0;
 }
+
 void PlayingState::banner(std::string title, std::string sub, sf::Color color, float life) {
     banners_.push_back({std::move(title), std::move(sub), color, 0.f, life});
 }
+
 void PlayingState::startDay() {
     if (!briefing_) return;
     briefing_ = false;
@@ -98,6 +104,7 @@ void PlayingState::startDay() {
     banner("Ngày " + std::to_string(game().progress.day), "Mở cửa nào!", {255, 244, 207}, 1.9f);
     say("Chọn khách để xem đơn, rồi xé bánh tráng nhé!");
 }
+
 void PlayingState::resetBowl() {
     bowl_.clear();
     drops_.clear();
@@ -113,9 +120,11 @@ void PlayingState::resetBowl() {
     mix_.reset();
     refreshButtons();
 }
+
 sf::FloatRect PlayingState::tray(std::size_t slot) const {
     return {40.f + static_cast<float>(slot % 3) * 142, 414.f + static_cast<float>(slot / 3) * 126, 130, 120};
 }
+
 sf::FloatRect PlayingState::customerArea(std::size_t index) const {
     const int slots =
         std::min(game().data.integer("queue_max"),
@@ -127,11 +136,13 @@ sf::FloatRect PlayingState::customerArea(std::size_t index) const {
     const float top = decorated ? 155.f : 92.f;
     return {margin + static_cast<float>(index) * (width + 12), top, width, 362.f - top};
 }
+
 bool PlayingState::hasDecorations() const {
     for (const auto *id : {"decor", "lantern", "curtain"})
         if (UpgradeSystem::effect(game().data, game().progress, id) > 0) return true;
     return false;
 }
+
 bool PlayingState::toppingsComplete() {
     if (bowl_.portions.empty() || !drops_.empty()) return false;
     for (const auto &customer : day_.customers()) {
