@@ -53,7 +53,7 @@ void ManagementState::rebuild() {
     addButton("Về menu", {1080, 30, 170, 45}, [this] { returnToMenu(); });
     if (kind_ == StateID::DayResult) {
         addButton("Đến cửa hàng", {420, 646, 210, 50}, [this] { stack_.replace(StateID::UpgradeShop); });
-        addButton("Mở ngày " + std::to_string(game().progress.day), {650, 646, 210, 50}, [this] { stack_.replace(StateID::Playing); });
+        addButton("Mở ngày " + std::to_string(game().progress.day), {650, 646, 210, 50}, [this] { stack_.replace(StateID::Prep); });
         return;
     }
     addButton("Nâng cấp quán", {30, 103, 225, 44}, [this] {
@@ -78,7 +78,7 @@ void ManagementState::rebuild() {
         dirty_ = true;
     }).setEnabled((page_ + 1) * 6 < size);
     addButton("Mở ngày " + std::to_string(game().progress.day), {965, 640, 285, 50},
-              [this] { stack_.replace(StateID::Playing); });
+              [this] { stack_.replace(StateID::Prep); });
     for (std::size_t slot = 0; slot < 6; ++slot) {
         const auto index = page_ * 6 + slot;
         if (index >= size)
@@ -121,7 +121,7 @@ bool ManagementState::handleEvent(const sf::Event &e, Pointer p) {
     if (e.type == sf::Event::KeyPressed) {
         if (e.key.code == sf::Keyboard::Enter) {
             sound("ui_click");
-            stack_.replace(StateID::Playing);
+            stack_.replace(StateID::Prep);
             return false;
         }
         if (kind_ == StateID::UpgradeShop) {

@@ -10,7 +10,7 @@ MainMenuState::MainMenuState(StateStack &stack, AppContext &context) : UiState(s
         context_.audio->music("menu");
     const auto &p = game().progress;
     addButton(p.day == 1 && p.served == 0 ? "Bắt đầu mở quán" : "Tiếp tục mở quán ngày " + std::to_string(p.day),
-              {82, 334, 360, 50}, [this] { stack_.replace(StateID::Playing); });
+              {82, 334, 360, 50}, [this] { openShop(); });
     addButton("Chơi lại từ đầu", {82, 394, 360, 44}, [this] {
         confirmReset_ = true;
         onCovered();
@@ -19,6 +19,10 @@ MainMenuState::MainMenuState(StateStack &stack, AppContext &context) : UiState(s
     addButton("Nâng cấp", {82, 448, 172, 44}, [this] { stack_.replace(StateID::UpgradeShop); });
     addButton("Cài đặt", {270, 448, 172, 44}, [this] { stack_.push(StateID::Settings); });
     addButton("Đánh giá khách", {82, 502, 172, 44}, [this] { stack_.push(StateID::Reviews); });
+    addButton("Cách chơi", {82, 556, 360, 40}, [this] {
+        game().guideFromMenu = true;
+        stack_.replace(StateID::Tutorial);
+    });
     addButton("Thoát", {270, 502, 172, 44}, [this] {
         game().save();
         context_.window.close();
@@ -30,7 +34,7 @@ MainMenuState::MainMenuState(StateStack &stack, AppContext &context) : UiState(s
     resetButtons_.emplace_back(context_.resources.uiFont(), "Hủy", sf::FloatRect(400, 431, 220, 48),
         [this] { confirmReset_ = false; });
     resetButtons_.emplace_back(context_.resources.uiFont(), "Bắt đầu lại", sf::FloatRect(660, 431, 220, 48), [this] {
-        if (game().restart()) stack_.replace(StateID::Playing);
+        if (game().restart()) openShop();
     });
     for (auto &button : resetButtons_) {
         button.setResources(context_.resources);
@@ -42,6 +46,11 @@ MainMenuState::MainMenuState(StateStack &stack, AppContext &context) : UiState(s
         stack_.push(StateID::DailyReward);
     }
 }
+void MainMenuState::openShop() {
+    // Người chơi lần đầu xem hướng dẫn trước; sau đó luôn qua màn chuẩn bị nguyên liệu.
+    game().guideFromMenu = false;
+    stack_.replace(game().progress.guideDone ? StateID::Prep : StateID::Tutorial);
+}
 bool MainMenuState::handleEvent(const sf::Event &e, Pointer mouse) {
     if (confirmReset_) {
         if (e.type == sf::Event::KeyPressed && e.key.code == sf::Keyboard::Escape) {
@@ -52,7 +61,7 @@ bool MainMenuState::handleEvent(const sf::Event &e, Pointer mouse) {
     }
     if (e.type == sf::Event::KeyPressed && (e.key.code == sf::Keyboard::Enter || e.key.code == sf::Keyboard::Space)) {
         sound("ui_click");
-        stack_.replace(StateID::Playing);
+        openShop();
         return false;
     }
     handleButtons(e, mouse);

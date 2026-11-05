@@ -8,6 +8,9 @@ class AudioManager {
     void music(const std::string &scene);
     void play(const std::string &name);
     void charging(bool active, float seconds = 2.4f);
+    // Tiếng mưa nền lặp lại khi trời mưa trong màn chơi.
+    void rain(bool active);
+    sf::SoundSource::Status rainStatus() const { return rain_.getStatus(); }
     void update(float musicVolume, float soundVolume);
     const std::string &musicScene() const { return scene_; }
     sf::SoundSource::Status musicStatus() const { return music_.getStatus(); }
@@ -29,6 +32,8 @@ class AudioManager {
     sf::Music music_;
     sf::Sound ambience_;
     sf::Sound charging_;
+    sf::Sound rain_;
+    bool rainActive_{false};
     bool chargingActive_{false};
     std::vector<std::unique_ptr<sf::Sound>> sounds_;
     std::string scene_, lastEffectPath_;

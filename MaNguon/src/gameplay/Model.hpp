@@ -1,14 +1,16 @@
 #pragma once
+#include "gameplay/DayClock.hpp"
+#include "gameplay/Weather.hpp"
 #include <SFML/Graphics/Color.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
-#include <iosfwd>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <set>
 #include <string>
+#include <array>
 #include <vector>
 namespace tiem {
 struct Topping {
@@ -25,11 +27,24 @@ struct CustomerKind {
     float spawnWeight{1.f};
     int minTypes{4}, maxTypes{6}, minQuantity{1}, maxQuantity{3};
     bool child{false}, olderAdult{false};
+    // Tính cách hay gặp ở kiểu khách này (id trong personalities.json); được ưu tiên khi bốc ngẫu nhiên.
+    std::vector<std::string> personalities;
     std::string happySound() const {
         if (child) return "customer_happy_child";
         if (femaleVoice) return "customer_happy_female";
         return olderAdult ? "customer_happy_oldman" : "customer_happy_man";
     }
+};
+// Tính cách khách: ảnh hưởng kiên nhẫn, tip, độ khó tính và lời thoại/biểu cảm.
+struct Personality {
+    std::string id, name, trait;
+    sf::Color color{226, 168, 58};
+    float weight{1.f};
+    float patience{1.f}, tip{1.f}, strict{1.f};
+    float fastTip{0.f};             // tip thêm (theo % giá món) khi giao lúc khách còn trên 60% kiên nhẫn
+    float angerAt{.3f}, worryAt{.5f}; // ngưỡng kiên nhẫn chuyển sang bực bội / sốt ruột
+    bool cheerful{false}, calm{false};
+    std::vector<std::string> greet, waiting, hurry, happy, sad;
 };
 struct UpgradeLevel {
     int price{};
@@ -43,6 +58,7 @@ struct GameData {
     nlohmann::json balance;
     std::vector<Topping> toppings;
     std::vector<CustomerKind> customers;
+    std::vector<Personality> personalities;
     std::vector<Upgrade> upgrades;
     explicit GameData(const std::filesystem::path &root);
     float number(const std::string &key) const {
@@ -52,6 +68,7 @@ struct GameData {
         return balance.at(key).get<int>();
     }
     const Topping &topping(const std::string &id) const;
+    std::size_t personalityIndex(const std::string &id) const;
     // Số liệu tùy chọn: bản data cũ thiếu khóa vẫn chạy với giá trị mặc định.
     float numberOr(const std::string &key, float fallback) const {
         const auto it = balance.find(key);
@@ -71,6 +88,13 @@ struct Progress {
     int fiveStars{}, perfectMixes{}, bestCombo{}, rushServed{}, goalsDone{}, perfectDays{}, dailyStreak{};
     std::int64_t lastDaily{-1};
     bool tutorialDone{false}, fullscreen{false};
+    // Hướng dẫn cách chơi (màn riêng trước ngày đầu) đã xem xong.
+    bool guideDone{false};
+    // Kho nguyên liệu (số muỗng theo id topping) và tiền nhập hàng của ngày đang chuẩn bị/chơi.
+    std::map<std::string, int> stock;
+    int todayCost{};
+    // Seed riêng của bản lưu để dự báo thời tiết cố định theo từng ngày.
+    std::uint32_t worldSeed{1};
     std::set<std::string> achievements;
     std::set<std::string> unlocked;
     std::map<std::string, int> levels;
@@ -85,8 +109,13 @@ struct Order {
 struct Customer {
     unsigned id{};
     std::size_t kind{};
+    std::size_t personality{};
     Order order;
-    float patience{}, remaining{}, arrival{};
+    // basePatience: theo độ khó, nâng cấp và kiểu khách; patience: sau khi nhân tính cách và thời tiết.
+    float basePatience{}, patience{}, remaining{}, arrival{};
+    unsigned lineSeed{};
+    float waited() const { return patience - remaining; }
+    float mood() const { return patience > 0 ? std::clamp(remaining / patience, 0.f, 1.f) : 0.f; }
 };
 struct Bowl {
     std::vector<std::string> portions;
@@ -104,14 +133,11 @@ struct Bowl {
         mixed = false;
     }
 };
-// Tô khớp đơn khi từng loại nguyên liệu và tổng số muỗng đều bằng đúng công thức.
-bool operator==(const Bowl &, const Order &);
-inline bool operator!=(const Bowl &bowl, const Order &order) { return !(bowl == order); }
 struct Receipt {
     float recipe{}, paper{}, mix{}, speed{}, score{};
     int base{}, tip{};
     // comboBonus và rushBonus đã nằm trong tip; tách riêng để UI hiển thị.
-    int comboBonus{}, rushBonus{}, combo{};
+    int comboBonus{}, rushBonus{}, weatherBonus{}, combo{};
     bool rush{false};
     int stars() const;
     const char *review() const;
@@ -121,10 +147,6 @@ struct DayGoal {
     int target{}, progress{}, reward{};
     bool done() const { return progress >= target; }
 };
-// Sắp theo phần thưởng tăng dần: mục tiêu dễ nhất đứng đầu danh sách.
-inline bool operator<(const DayGoal &a, const DayGoal &b) { return a.reward < b.reward; }
-// In điểm thành phần của hóa đơn, ví dụ "Công thức 100% • Xé 100% • Trộn 80% • Tốc độ 60%".
-std::ostream &operator<<(std::ostream &, const Receipt &);
 struct AchievementInfo {
     std::string id, name, description;
     int target{};
@@ -158,6 +180,15 @@ struct DayResult {
     int bestCombo{}, comboBonus{}, rushBonus{}, rushServed{}, fiveStars{}, perfectMixes{}, fastServed{};
     int goalBonus{}, goalsDone{};
     bool perfectDay{false};
+    // Bổ sung bảng kết quả mới: thời tiết, thu chi nguyên liệu, khách theo giờ và khách nổi bật.
+    WeatherPlan weather;
+    int weatherBonus{}, ingredientCost{}, spoiledPortions{}, spoiledValue{};
+    std::array<int, DayClock::hours> servedByHour{}, leftByHour{};
+    float bestScore{-1.f};
+    std::size_t bestKind{}, bestPersonality{};
+    int delighted{}, unhappy{};
+    int profit() const { return revenue + tips + goalBonus - ingredientCost; }
+    char grade() const;
     std::vector<DayGoal> goals;
     std::vector<std::string> newAchievements;
     float rating() const;
@@ -185,6 +216,12 @@ class DaySession {
     float remaining() const {
         return remaining_;
     }
+    const WeatherPlan &weatherPlan() const { return weather_; }
+    Weather weather() const { return weather_.at(clock_.progress(remaining_)); }
+    float hour() const { return clock_.hour(remaining_); }
+    const DayClock &clock() const { return clock_; }
+    // Khách vừa bỏ về vì hết kiên nhẫn kể từ lần gọi trước (UI dùng để diễn hoạt cảnh rời quán).
+    std::vector<Customer> takeDeparted() { return std::move(departed_); }
     int capacity() const;
     int combo() const { return combo_; }
     bool rush() const { return rushActive_; }
@@ -216,6 +253,10 @@ class DaySession {
     float rushBegin_{}, rushEnd_{};
     bool rushActive_{false}, rushFinished_{false};
     std::vector<std::string> unlockedQueue_;
+    WeatherPlan weather_;
+    DayClock clock_;
+    std::mt19937 moodRandom_;
+    std::vector<Customer> departed_;
 };
 std::string moneyText(int amount);
 // Văn bản mô tả nhiệm vụ ngày: đầy đủ (màn chuẩn bị/tổng kết) và gọn (HUD).

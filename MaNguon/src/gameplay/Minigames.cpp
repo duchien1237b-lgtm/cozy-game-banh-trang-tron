@@ -60,16 +60,36 @@ int ToppingCharge::release() {
     cancel();
     return amount;
 }
-MixingMinigame::MixingMinigame(const GameData &d, float bonus, int day) : data_(d) {
+MixingMinigame::MixingMinigame(const GameData &d, float bonus, int day, unsigned seed) : data_(d), random_(seed) {
     speed_ = std::min(d.number("mix_speed_max"),
                       d.number("mix_speed") * difficultyMultiplier(d, day));
-    width_ = std::min(d.number("mix_window_max"), d.number("mix_window") + bonus);
+    width_ = baseWidth_ = std::min(d.number("mix_window_max"), d.number("mix_window") + bonus);
+}
+const char *MixingMinigame::rhythmName(MixRhythm rhythm) {
+    switch (rhythm) {
+    case MixRhythm::Steady: return "Nhịp đều";
+    case MixRhythm::Fast: return "Nhịp nhanh";
+    case MixRhythm::Slow: return "Nhịp chậm";
+    case MixRhythm::Wobble: return "Nhịp lắc lư";
+    case MixRhythm::Reverse: return "Nhịp đảo chiều";
+    }
+    return "";
 }
 void MixingMinigame::update(float dt) {
     if (done())
         return;
+    dt = std::max(0.f, dt);
     cooldown_ = std::max(0.f, cooldown_ - dt);
-    position_ += direction_ * speed_ * dt;
+    beatClock_ += dt;
+    float scale = speedScale_;
+    // Lắc lư: tốc độ dao động theo sóng sin, vạch lúc nhanh lúc chậm.
+    if (rhythm_ == MixRhythm::Wobble) scale *= 1.f + .45f * std::sin(beatClock_ * 5.2f);
+    // Đảo chiều: tới thời điểm bốc sẵn thì vạch quay đầu bất ngờ (một lần mỗi nhịp).
+    if (rhythm_ == MixRhythm::Reverse && reverseAt_ >= 0 && beatClock_ >= reverseAt_) {
+        direction_ = -direction_;
+        reverseAt_ = -1.f;
+    }
+    position_ += direction_ * speed_ * scale * dt;
     while (position_ < 0 || position_ > 1) {
         if (position_ > 1) {
             position_ = 2 - position_;
@@ -80,6 +100,26 @@ void MixingMinigame::update(float dt) {
         }
     }
 }
+void MixingMinigame::nextBeat() {
+    std::uniform_real_distribution<float> unit(0.f, 1.f);
+    const float roll = unit(random_);
+    rhythm_ = roll < .22f ? MixRhythm::Steady : roll < .42f ? MixRhythm::Fast : roll < .58f ? MixRhythm::Slow
+            : roll < .80f ? MixRhythm::Wobble : MixRhythm::Reverse;
+    // Tốc độ và độ rộng vùng xanh dao động quanh mức chuẩn; nâng cấp muỗng vẫn luôn có tác dụng.
+    speedScale_ = rhythm_ == MixRhythm::Fast ? 1.22f + .12f * unit(random_)
+                : rhythm_ == MixRhythm::Slow ? .72f + .1f * unit(random_) : .9f + .2f * unit(random_);
+    width_ = std::min(data_.number("mix_window_max"), baseWidth_ * (.82f + .3f * unit(random_)));
+    beatClock_ = 0;
+    reverseAt_ = rhythm_ == MixRhythm::Reverse ? .35f + .5f * unit(random_) : -1.f;
+    // Vùng mới luôn nằm trọn trong thanh và cách vùng cũ đủ xa để phải chờ vạch chạy tới.
+    const float margin = width_ * .5f + .02f;
+    const float old = target_;
+    float next = old;
+    for (int attempt = 0; attempt < 12 && std::abs(next - old) < .28f; ++attempt)
+        next = margin + (1.f - 2.f * margin) * unit(random_);
+    if (std::abs(next - old) < .28f) next = old < .5f ? 1.f - margin : margin;
+    target_ = next;
+}
 std::optional<float> MixingMinigame::hit() {
     if (done() || cooldown_ > 0)
         return std::nullopt;
@@ -89,10 +129,7 @@ std::optional<float> MixingMinigame::hit() {
     ++hits_;
     sum_ += value;
     cooldown_ = data_.number("mix_hit_cooldown");
-    // Alternate distant sides; the next zone is always entirely inside the timing bar.
-    const float margin = width_ * .5f + .02f;
-    const float fraction = hits_ % 2 ? .18f : .82f;
-    target_ = margin + (1.f - 2.f * margin) * fraction;
+    nextBeat();
     return value;
 }
 } // namespace tiem

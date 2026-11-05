@@ -3,15 +3,17 @@
 #include "core/SaveSystem.hpp"
 #include "core/StateStack.hpp"
 #include "core/Utf8.hpp"
+#include "gameplay/CustomerMood.hpp"
+#include "gameplay/Inventory.hpp"
 #include "gameplay/Minigames.hpp"
 #include "gameplay/Model.hpp"
 #include "ui/Button.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 
 namespace {
@@ -119,7 +121,7 @@ int main(int argc, char **argv) {
                 for (const auto &t : data.toppings) freshProgress.unlocked.insert(t.id);
                 int previousTotal = 0;
                 float previousPatience = 10000.f;
-                std::map<std::string, int> cappedRecipe;
+                std::vector<int> cappedShape;
                 float cappedPatience = 0;
                 for (int dayNumber : {1, 2, 7, 14, 30, 1000}) {
                     freshProgress.day = dayNumber;
@@ -131,16 +133,23 @@ int main(int argc, char **argv) {
                     }
                     require(total >= kind.minTypes && total <= static_cast<int>(std::floor(kind.minTypes * 1.65f + .0001f)) + 2 &&
                             total <= session.capacity(), "Order workload below minimum or exceeded the cap plus random extra");
-                    require(guest.patience <= previousPatience + .0001f &&
-                            guest.patience >= data.number("patience_seconds") * kind.patienceFactor / 1.65f - .001f,
+                    // basePatience là phần do độ khó quyết định; tính cách và thời tiết nhân thêm ở patience.
+                    require(guest.basePatience <= previousPatience + .0001f &&
+                            guest.basePatience >= data.number("patience_seconds") * kind.patienceFactor / 1.65f - .001f,
                             "Patience scaling is not monotonic or exceeds the difficulty cap");
+                    const auto &persona = data.personalities.at(guest.personality);
+                    require(guest.patience > 0 && std::abs(guest.patience - guest.basePatience * persona.patience *
+                            tiem::WeatherSystem::effect(session.weather()).patience) < .001f,
+                            "Personality or weather patience factor not applied");
                     if (dayNumber == 1) require(total <= kind.minTypes + 1 &&
-                            std::abs(guest.patience - 84.f * kind.patienceFactor) < .001f, "Day one is not easier");
-                    if (dayNumber == 14) { cappedRecipe = guest.order.recipe; cappedPatience = guest.patience; }
-                    if (dayNumber > 14) require(guest.order.recipe == cappedRecipe && guest.patience == cappedPatience,
+                            std::abs(guest.basePatience - 84.f * kind.patienceFactor) < .001f, "Day one is not easier");
+                    // Thời tiết đổi loại topping được gọi, nhưng khối lượng đơn (số loại, số muỗng) vẫn ngừng tăng sau ngày 14.
+                    const std::vector<int> shape = {static_cast<int>(guest.order.recipe.size()), total};
+                    if (dayNumber == 14) { cappedShape = shape; cappedPatience = guest.basePatience; }
+                    if (dayNumber > 14) require(shape == cappedShape && guest.basePatience == cappedPatience,
                             "Customer difficulty kept increasing past day 14");
                     previousTotal = total;
-                    previousPatience = guest.patience;
+                    previousPatience = guest.basePatience;
                 }
             }
         }
@@ -168,23 +177,6 @@ int main(int argc, char **argv) {
         auto receipt = tiem::EconomySystem::score(data, progress, customer, bowl);
         require(std::abs(receipt.score - 1) < .0001f && receipt.base == 20000 && receipt.tip == 3600,
                 "Perfect recipe payout wrong");
-        // Operator overloading: so khớp tô với đơn, so sánh mục tiêu ngày và in hóa đơn.
-        require(bowl == customer.order && !(bowl != customer.order), "operator== rejected an exact bowl");
-        {
-            tiem::Bowl missing = bowl, extra = bowl, empty;
-            missing.portions.pop_back();
-            extra.portions.push_back("muoi_tom");
-            require(missing != customer.order && extra != customer.order && empty != customer.order,
-                    "operator== accepted a wrong bowl");
-            tiem::DayGoal easy, hard;
-            easy.reward = 1000; hard.reward = 5000;
-            require(easy < hard && !(hard < easy), "DayGoal operator< ordering wrong");
-            std::ostringstream text;
-            text << receipt;
-            require(text.str().find("Công thức 100%") != std::string::npos &&
-                        text.str().find("Tốc độ 100%") != std::string::npos,
-                    "Receipt operator<< output wrong");
-        }
         customer.remaining = 30;
         auto slower = tiem::EconomySystem::score(data, progress, customer, bowl);
         require(std::abs(slower.score - .95f) < .0001f, "Speed weight must be 10 percent");
@@ -745,6 +737,188 @@ int main(int argc, char **argv) {
             auto q = tiem::Progress::fresh(data);
             tiem::AchievementSystem::check(data, q);
             require(tiem::AchievementSystem::check(data, q).empty(), "Achievements unlocked twice");
+        }
+        // ---- Tính năng mới: đồng hồ 7h-21h, thời tiết, kho nguyên liệu, tính cách khách, nhịp trộn ngẫu nhiên ----
+        {
+            const tiem::DayClock clock(180);
+            require(clock.hour(180) == 7.f && clock.hour(0) == 21.f && std::abs(clock.hour(90) - 14.f) < .001f,
+                    "Day clock must run from 07:00 to 21:00");
+            require(tiem::DayClock::format(7.5f) == "07:30" && tiem::DayClock::format(20.99f) == "20:50" &&
+                    tiem::DayClock::format(21.f) == "21:00", "Clock text format wrong");
+            require(clock.slot(180) == 0 && clock.slot(0) == tiem::DayClock::hours - 1 && clock.slot(.01f) == 13,
+                    "Hour slots out of range");
+            require(tiem::DayClock::light(12, 0).night == 0.f && tiem::DayClock::light(21, 0).night > .8f &&
+                    tiem::DayClock::light(20, 0).night > tiem::DayClock::light(18, 0).night &&
+                    tiem::DayClock::light(12, 1).tint.r < tiem::DayClock::light(12, 0).tint.r,
+                    "Scene must darken towards night and under rain");
+            require(tiem::DayClock::trafficFactor(12) > 1.f && tiem::DayClock::trafficFactor(7.2f) < 1.f, "Traffic curve wrong");
+        }
+        {
+            const auto first = tiem::WeatherSystem::forecast(123, 1);
+            require(first.base == tiem::Weather::Sunny && !first.changes(), "Day one must be sunny");
+            std::set<int> kinds;
+            int changing = 0;
+            for (int dayNumber = 2; dayNumber < 300; ++dayNumber) {
+                const auto plan = tiem::WeatherSystem::forecast(77, dayNumber);
+                const auto again = tiem::WeatherSystem::forecast(77, dayNumber);
+                require(plan.base == again.base && plan.begin == again.begin && plan.end == again.end, "Forecast not deterministic");
+                kinds.insert(static_cast<int>(plan.base));
+                if (plan.changes()) {
+                    ++changing;
+                    require(plan.begin >= 0 && plan.end <= 1 && plan.end > plan.begin && plan.interlude != plan.base,
+                            "Weather interlude invalid");
+                    require(plan.at((plan.begin + plan.end) / 2) == plan.interlude && plan.at(plan.begin - .01f) == plan.base,
+                            "Weather plan lookup wrong");
+                }
+                require(plan.rainShare() >= 0 && plan.rainShare() <= 1, "Rain share outside 0..1");
+            }
+            require(kinds.size() == 3 && changing > 60 && changing < 200, "Weather variety looks wrong");
+            const auto rain = tiem::WeatherSystem::effect(tiem::Weather::Rainy);
+            const auto sun = tiem::WeatherSystem::effect(tiem::Weather::Sunny);
+            require(rain.spawn < 1 && rain.patience > 1 && rain.tip > 0 && sun.spawn > 1 && sun.freshBias > 0,
+                    "Weather effects inverted");
+            require(tiem::WeatherSystem::toppingWeight("fresh", .35f) > tiem::WeatherSystem::toppingWeight("dry", .35f) &&
+                    tiem::WeatherSystem::toppingWeight("fresh", -.3f) < tiem::WeatherSystem::toppingWeight("sauce", -.3f),
+                    "Weather taste preference wrong");
+            require(!tiem::WeatherSystem::summary(tiem::WeatherSystem::forecast(77, 5)).empty(), "Weather summary empty");
+        }
+        {
+            auto stocked = tiem::Progress::fresh(data);
+            for (const auto &t : data.toppings)
+                require(tiem::InventorySystem::stock(stocked, t.id) == (t.initial ? 8 : 0), "Starter stock wrong");
+            const int money = stocked.money;
+            const auto &mango = data.topping("xoai_song");
+            require(tiem::InventorySystem::unitCost(data, mango) == 1000 && tiem::InventorySystem::rushCost(data, mango) == 2000,
+                    "Ingredient prices wrong");
+            require(tiem::InventorySystem::buy(data, stocked, "xoai_song", 5) == 5 && stocked.money == money - 5000 &&
+                    stocked.todayCost == 5000 && tiem::InventorySystem::stock(stocked, "xoai_song") == 13, "Buying stock failed");
+            require(tiem::InventorySystem::buy(data, stocked, "kho_bo", 5) == 0, "Locked topping could be stocked");
+            stocked.money = 1000000;
+            require(tiem::InventorySystem::buy(data, stocked, "muoi_tom", 1000) == tiem::InventorySystem::maxStock(data) - 8,
+                    "Stock cap not applied");
+            auto broke = tiem::Progress::fresh(data);
+            broke.money = 900;
+            require(tiem::InventorySystem::buy(data, broke, "xoai_song", 1) == 0 && broke.money == 900, "Bought without money");
+            require(!tiem::InventorySystem::buyCart(data, broke, {{"muoi_tom", 1}, {"xoai_song", 1}}) &&
+                    tiem::InventorySystem::stock(broke, "muoi_tom") == 8 && broke.money == 900, "Cart purchase is not atomic");
+            require(tiem::InventorySystem::take(stocked, "rau_ram", 3) == 3 && tiem::InventorySystem::take(stocked, "rau_ram", 99) == 5 &&
+                    tiem::InventorySystem::take(stocked, "rau_ram", 1) == 0, "Taking stock wrong");
+            tiem::InventorySystem::restore(data, stocked, "rau_ram", 2);
+            const auto lost = tiem::InventorySystem::spoil(data, stocked);
+            require(lost.portions == 13 + 8 + 2 && tiem::InventorySystem::stock(stocked, "xoai_song") == 0 &&
+                    tiem::InventorySystem::stock(stocked, "hanh_phi") == 8 && lost.value > 0,
+                    "Only fresh ingredients may spoil overnight");
+            auto planner = tiem::Progress::fresh(data);
+            planner.stock.clear();
+            const auto plan = tiem::WeatherSystem::forecast(planner.worldSeed, 3);
+            const auto cart = tiem::InventorySystem::suggest(data, planner, plan);
+            require(!cart.empty() && tiem::InventorySystem::cost(data, cart) <= planner.money * .6f + 1,
+                    "Suggested cart empty or over budget");
+            for (const auto &item : cart) require(planner.unlocked.count(item.first) && item.second > 0, "Suggested a locked item");
+            // Một ngày chơi: tiền nhập hàng được ghi vào bảng kết quả, đồ tươi hỏng, thống kê theo giờ khớp tổng.
+            auto dayProgress = tiem::Progress::fresh(data);
+            dayProgress.money = 100000;
+            tiem::InventorySystem::buy(data, dayProgress, "trung_cut", 4);
+            tiem::DaySession session(data, dayProgress, 21);
+            tiem::Bowl dish;
+            dish.mixed = true;
+            dish.paperQuality = dish.mixQuality = 1;
+            for (const auto &item : session.customers().front().order.recipe)
+                for (int n = 0; n < item.second; ++n) dish.portions.push_back(item.first);
+            session.update(5);
+            session.serve(0, dish);
+            session.update(200);
+            const auto &result = session.result();
+            int servedSum = 0, leftSum = 0;
+            for (int i = 0; i < tiem::DayClock::hours; ++i) {
+                servedSum += result.servedByHour[static_cast<std::size_t>(i)];
+                leftSum += result.leftByHour[static_cast<std::size_t>(i)];
+            }
+            require(result.ingredientCost == 6000 && dayProgress.todayCost == 0 && result.spoiledPortions == 8 + 8 + 8 + 4 &&
+                    tiem::InventorySystem::stock(dayProgress, "trung_cut") == 0 && tiem::InventorySystem::stock(dayProgress, "muoi_tom") == 8,
+                    "Ingredient ledger or spoilage wrong at closing time");
+            require(servedSum == result.served && leftSum == result.left && result.bestScore > 0, "Hourly stats do not add up");
+            require(result.profit() == result.revenue + result.tips + result.goalBonus - result.ingredientCost, "Profit formula wrong");
+            require(std::string("SABCD").find(result.grade()) != std::string::npos, "Grade outside S..D");
+        }
+        {
+            require(data.personalities.size() == 7 && data.personalities.front().id == "normal" &&
+                    data.personalities.front().strict == 1 && data.personalities.front().tip == 1, "Personalities not loaded");
+            const auto picky = data.personalityIndex("picky"), generous = data.personalityIndex("generous");
+            require(data.personalities[picky].strict > 1 && data.personalities[generous].tip > 1, "Personality factors wrong");
+            tiem::Customer guest;
+            guest.patience = guest.remaining = 60;
+            guest.order.recipe = {{"muoi_tom", 2}, {"xoai_song", 1}};
+            guest.order.price = 20000;
+            tiem::Bowl near;
+            near.portions = {"muoi_tom", "xoai_song"};
+            near.paperQuality = near.mixQuality = 1;
+            near.mixed = true;
+            const auto plain = tiem::EconomySystem::score(data, progress, guest, near);
+            guest.personality = picky;
+            const auto strict = tiem::EconomySystem::score(data, progress, guest, near);
+            guest.personality = generous;
+            const auto rich = tiem::EconomySystem::score(data, progress, guest, near);
+            require(strict.recipe < plain.recipe && rich.tip > plain.tip, "Picky or generous personality has no effect");
+            std::set<std::size_t> seenPersonalities;
+            for (unsigned seed = 0; seed < 300; ++seed) {
+                auto visitProgress = tiem::Progress::fresh(data);
+                tiem::DaySession visit(data, visitProgress, seed);
+                seenPersonalities.insert(visit.customers().front().personality);
+            }
+            require(seenPersonalities.size() == data.personalities.size(), "Some personalities never appear");
+            const auto &hot = data.personalities[data.personalityIndex("hot_tempered")];
+            const auto &calm = data.personalities[data.personalityIndex("easygoing")];
+            tiem::Customer waiting;
+            waiting.patience = 100;
+            waiting.remaining = 99;
+            require(tiem::CustomerMood::waiting(waiting, hot) == tiem::Expression::Happy, "New customer should greet happily");
+            waiting.remaining = 40;
+            require(tiem::CustomerMood::waiting(waiting, hot) == tiem::Expression::Angry &&
+                    tiem::CustomerMood::waiting(waiting, calm) != tiem::Expression::Angry,
+                    "Hot-tempered customers must anger sooner than easygoing ones");
+            waiting.remaining = 25;
+            require(tiem::CustomerMood::waiting(waiting, calm) == tiem::Expression::Bored, "Easygoing customer should look bored");
+            require(tiem::CustomerMood::reaction(5, hot) == tiem::Expression::Delighted &&
+                    tiem::CustomerMood::reaction(4, data.personalities[picky]) == tiem::Expression::Neutral &&
+                    tiem::CustomerMood::reaction(1, hot) == tiem::Expression::Sad, "Serve reaction wrong");
+            for (int e = 0; e <= static_cast<int>(tiem::Expression::Surprised); ++e) {
+                const std::string face = tiem::CustomerMood::face(static_cast<tiem::Expression>(e));
+                require(face == "happy" || face == "normal" || face == "angry", "Expression maps to missing artwork");
+                require(!tiem::CustomerMood::line(hot, static_cast<tiem::Expression>(e), 3).empty(), "Missing dialogue line");
+            }
+        }
+        {
+            std::set<int> rhythms;
+            for (unsigned seed = 0; seed < 40; ++seed) {
+                tiem::MixingMinigame a(data, 0, 3, seed), b(data, 0, 3, seed);
+                for (int beat = 0; beat < data.integer("mix_hits"); ++beat) {
+                    for (int f = 0; f < 37; ++f) { a.update(.017f); b.update(.017f); }
+                    a.hit();
+                    b.hit();
+                    require(a.target() == b.target() && a.rhythm() == b.rhythm() && a.position() == b.position(),
+                            "Mixing rhythm not reproducible from its seed");
+                    require(a.target() - a.width() / 2 >= 0 && a.target() + a.width() / 2 <= 1 && a.width() > 0,
+                            "Random mixing zone outside the bar");
+                    rhythms.insert(static_cast<int>(a.rhythm()));
+                }
+            }
+            require(rhythms.size() >= 4, "Mixing rhythm is not varied");
+        }
+        {
+            const auto folder = std::filesystem::temp_directory_path() /
+                ("tiem_feature_save_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            tiem::SaveSystem store(folder);
+            auto saved = tiem::Progress::fresh(data);
+            saved.guideDone = true;
+            saved.stock["muoi_tom"] = 17;
+            saved.todayCost = 4200;
+            saved.worldSeed = 987654321u;
+            require(store.write(saved), "Feature save failed");
+            const auto loaded = store.load(data);
+            require(loaded.guideDone && tiem::InventorySystem::stock(loaded, "muoi_tom") == 17 && loaded.todayCost == 4200 &&
+                    loaded.worldSeed == 987654321u, "New progress fields did not round-trip");
+            std::filesystem::remove_all(folder);
         }
         std::cout << "PASS: data, recipe scoring, upgrades, paper, mixing, customers, day loop, save "
                      "recovery, UTF-8, input and state lifetime\n";

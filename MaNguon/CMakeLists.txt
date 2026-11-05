@@ -10,29 +10,41 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 include(FetchContent)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static SFML" FORCE)
-set(SFML_BUILD_AUDIO ON CACHE BOOL "" FORCE)
-set(SFML_BUILD_GRAPHICS ON CACHE BOOL "" FORCE)
-set(SFML_BUILD_WINDOW ON CACHE BOOL "" FORCE)
-set(SFML_BUILD_NETWORK OFF CACHE BOOL "" FORCE)
-set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(SFML_BUILD_TEST_SUITE OFF CACHE BOOL "" FORCE)
-set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
-set(JSON_Install OFF CACHE BOOL "" FORCE)
+# TIEM_USE_SYSTEM_DEPS=ON: dùng SFML/nlohmann_json đã cài sẵn (ví dụ apt install libsfml-dev
+# nlohmann-json3-dev trên Linux) thay vì tải từ Internet. Mặc định vẫn tải bản khóa SHA-256.
+option(TIEM_USE_SYSTEM_DEPS "Use installed SFML 2.5+/nlohmann_json instead of FetchContent" OFF)
+if(TIEM_USE_SYSTEM_DEPS)
+    find_package(SFML 2.5 REQUIRED COMPONENTS graphics window audio system)
+    find_package(nlohmann_json 3.2 REQUIRED)
+else()
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static SFML" FORCE)
+    set(SFML_BUILD_AUDIO ON CACHE BOOL "" FORCE)
+    set(SFML_BUILD_GRAPHICS ON CACHE BOOL "" FORCE)
+    set(SFML_BUILD_WINDOW ON CACHE BOOL "" FORCE)
+    set(SFML_BUILD_NETWORK OFF CACHE BOOL "" FORCE)
+    set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
+    set(SFML_BUILD_TEST_SUITE OFF CACHE BOOL "" FORCE)
+    set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+    set(JSON_Install OFF CACHE BOOL "" FORCE)
 
-# Khóa phiên bản và SHA-256: máy khác tải cùng một bộ mã nguồn.
-FetchContent_Declare(sfml
-    URL https://codeload.github.com/SFML/SFML/tar.gz/refs/tags/2.6.2
-    URL_HASH SHA256=15ff4d608a018f287c6a885db0a2da86ea389e516d2323629e4d4407a7ce047f)
-FetchContent_Declare(nlohmann_json
-    URL https://codeload.github.com/nlohmann/json/tar.gz/refs/tags/v3.11.3
-    URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406)
-FetchContent_MakeAvailable(sfml nlohmann_json)
+    # Khóa phiên bản và SHA-256: máy khác tải cùng một bộ mã nguồn.
+    FetchContent_Declare(sfml
+        URL https://codeload.github.com/SFML/SFML/tar.gz/refs/tags/2.6.2
+        URL_HASH SHA256=15ff4d608a018f287c6a885db0a2da86ea389e516d2323629e4d4407a7ce047f)
+    FetchContent_Declare(nlohmann_json
+        URL https://codeload.github.com/nlohmann/json/tar.gz/refs/tags/v3.11.3
+        URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406)
+    FetchContent_MakeAvailable(sfml nlohmann_json)
+endif()
 
 add_library(tiem_core STATIC
     src/gameplay/Model.cpp
     src/gameplay/Minigames.cpp
+    src/gameplay/Weather.cpp
+    src/gameplay/DayClock.cpp
+    src/gameplay/Inventory.cpp
+    src/gameplay/CustomerMood.cpp
     src/core/SaveSystem.cpp
     src/core/AudioManager.cpp
     src/ui/Art.cpp
@@ -43,7 +55,8 @@ add_library(tiem_core STATIC
     src/core/ResourceManager.cpp
     src/core/StateStack.cpp
     src/ui/Button.cpp
-    src/ui/Draw.cpp)
+    src/ui/Draw.cpp
+    src/ui/Atmosphere.cpp)
 target_include_directories(tiem_core PUBLIC src)
 target_link_libraries(tiem_core PUBLIC
     sfml-graphics sfml-window sfml-audio sfml-system nlohmann_json::nlohmann_json)
@@ -56,7 +69,10 @@ add_executable(BanhTrangTiem
     src/states/ReviewsState.cpp
     src/states/OverlayState.cpp
     src/states/RewardState.cpp
-    src/states/ManagementState.cpp)
+    src/states/ManagementState.cpp
+    src/states/PrepState.cpp
+    src/states/DayReportState.cpp
+    src/states/TutorialState.cpp)
 target_link_libraries(BanhTrangTiem PRIVATE tiem_core)
 if(WIN32)
     enable_language(RC)
@@ -108,9 +124,15 @@ if(WIN32)
     else()
         set(TIEM_OPENAL_ARCH x86)
     endif()
+    # Bản SFML tải về có sẵn openal32.dll; khi dùng SFML cài sẵn thì chỉ đường dẫn qua TIEM_OPENAL_DLL.
+    if(TIEM_USE_SYSTEM_DEPS)
+        set(TIEM_OPENAL_DLL "" CACHE FILEPATH "openal32.dll copied next to the executable")
+    else()
+        set(TIEM_OPENAL_DLL "${sfml_SOURCE_DIR}/extlibs/bin/${TIEM_OPENAL_ARCH}/openal32.dll")
+    endif()
     add_custom_command(TARGET BanhTrangTiem POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${sfml_SOURCE_DIR}/extlibs/bin/${TIEM_OPENAL_ARCH}/openal32.dll"
+            "${TIEM_OPENAL_DLL}"
             "$<TARGET_FILE_DIR:BanhTrangTiem>" VERBATIM)
 endif()
 
@@ -126,7 +148,7 @@ if(TIEM_BUILD_TESTS)
     if(WIN32)
         add_custom_command(TARGET tiem_tests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${sfml_SOURCE_DIR}/extlibs/bin/${TIEM_OPENAL_ARCH}/openal32.dll"
+                "${TIEM_OPENAL_DLL}"
                 "$<TARGET_FILE_DIR:tiem_tests>" VERBATIM)
     endif()
     add_test(NAME core_behaviour COMMAND tiem_tests "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -134,6 +156,12 @@ endif()
 
 option(TIEM_BUILD_PREVIEW "Build offscreen UI preview exporter" OFF)
 if(TIEM_BUILD_PREVIEW)
+    add_executable(tiem_preview_features tools/PreviewFeatures.cpp
+        src/states/MainMenuState.cpp src/states/PlayingState.cpp src/states/ManagementState.cpp
+        src/states/ReviewsState.cpp src/states/OverlayState.cpp src/states/RewardState.cpp
+        src/states/PrepState.cpp src/states/DayReportState.cpp src/states/TutorialState.cpp)
+    target_link_libraries(tiem_preview_features PRIVATE tiem_core)
+    tiem_warnings(tiem_preview_features)
     add_executable(tiem_preview tools/PreviewUi.cpp
         src/states/MainMenuState.cpp src/states/PlayingState.cpp src/states/ManagementState.cpp
         src/states/ReviewsState.cpp src/states/OverlayState.cpp src/states/RewardState.cpp)
@@ -145,7 +173,7 @@ if(TIEM_BUILD_PREVIEW)
     if(WIN32)
         add_custom_command(TARGET tiem_preview POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${sfml_SOURCE_DIR}/extlibs/bin/${TIEM_OPENAL_ARCH}/openal32.dll"
+                "${TIEM_OPENAL_DLL}"
                 "$<TARGET_FILE_DIR:tiem_preview>" VERBATIM)
     endif()
 endif()

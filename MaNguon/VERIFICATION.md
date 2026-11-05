@@ -184,3 +184,13 @@ Build Release thành công, CTest 1/1 đạt. Preview --bowls-only tải đủ h
 ## Dọn ảnh trùng 2026-10-30
 
 Xóa 118 bản sao ảnh không dùng (12.457.994 byte) và 19 thư mục ảnh rỗng. Đối chiếu SHA-256 trước khi xóa: ảnh ngoài cozy trùng bản chuẩn code đang nạp; bộ tô cũ trong cozy/bowl_remodel trùng bộ mới ở images/bowl_remodel. Giữ mã nguồn, tests, tools, assets cần thiết, âm thanh dự phòng, giấy phép và Git. Đã xác minh các file còn lại theo manifest cũ và toàn bộ assets mã nguồn có bản chạy tương ứng cùng hash. File chạy không thay đổi. Làm mới manifest và ZIP sau khi dọn.
+
+
+## Kiểm tra bản v3 (2026-11-05)
+
+Bảy tính năng mới: thời tiết, chuẩn bị nguyên liệu, nhịp trộn ngẫu nhiên, đồng hồ 7:00–21:00 tối dần, tính cách và biểu cảm khách, bảng kết quả cuối ngày, hướng dẫn lần đầu.
+
+- Linux (GCC, SFML 2.6 hệ thống, `TIEM_USE_SYSTEM_DEPS=ON`): build không lỗi; CTest PASS, có thêm nhóm test cho DayClock, Weather, Inventory (sổ thu chi, hàng hỏng, thống kê theo giờ, hạng ngày), tính cách/biểu cảm, độ lặp lại và giới hạn của nhịp trộn, lưu/đọc các khóa save mới.
+- Hành trình đầy đủ chạy qua StateStack thật: menu → hướng dẫn → chuẩn bị → chơi → kết quả → chuẩn bị ngày 2 → menu. Đã xem ảnh chụp 1280x720 của từng màn mới.
+- Windows x64: `GocNhoBanhTrang.exe` được cross-compile bằng MinGW-w64 (posix) với SFML 2.6.2 tĩnh build từ source; chỉ phụ thuộc DLL hệ thống và `openal32.dll` có sẵn. Bản test Windows chạy PASS dưới Wine 9; game mở được tới menu dưới Wine. Chưa chạy thử trên máy Windows thật và chưa nghe thử âm thanh bằng loa.
+- Save cũ (không có `guide_done`, `stock`) vẫn đọc được: người chơi đã qua ngày 1 không bị bắt xem lại hướng dẫn, kho bắt đầu trống và nhập ở màn Chuẩn bị.

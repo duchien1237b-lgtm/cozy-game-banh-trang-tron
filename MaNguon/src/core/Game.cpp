@@ -2,7 +2,10 @@
 #include "core/Paths.hpp"
 #include "core/Utf8.hpp"
 #include "states/MainMenuState.hpp"
+#include "states/DayReportState.hpp"
 #include "states/ManagementState.hpp"
+#include "states/PrepState.hpp"
+#include "states/TutorialState.hpp"
 #include "states/OverlayState.hpp"
 #include "states/PlayingState.hpp"
 #include "states/RewardState.hpp"
@@ -69,9 +72,12 @@ void Game::registerStates() {
     for (const auto id : {StateID::Pause, StateID::Settings})
         states_.registerFactory(id,
                                 [this, id] { return std::make_unique<OverlayState>(states_, context_, id); });
-    for (const auto id : {StateID::DayResult, StateID::UpgradeShop})
-        states_.registerFactory(
-            id, [this, id] { return std::make_unique<ManagementState>(states_, context_, id); });
+    states_.registerFactory(StateID::UpgradeShop,
+                            [this] { return std::make_unique<ManagementState>(states_, context_, StateID::UpgradeShop); });
+    states_.registerFactory(StateID::DayResult,
+                            [this] { return std::make_unique<DayReportState>(states_, context_); });
+    states_.registerFactory(StateID::Prep, [this] { return std::make_unique<PrepState>(states_, context_); });
+    states_.registerFactory(StateID::Tutorial, [this] { return std::make_unique<TutorialState>(states_, context_); });
 }
 
 void Game::resize(unsigned int width, unsigned int height) {

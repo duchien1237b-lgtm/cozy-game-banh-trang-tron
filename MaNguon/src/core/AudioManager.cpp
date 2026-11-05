@@ -12,6 +12,7 @@ void AudioManager::music(const std::string &scene) {
     music_.stop();
     ambience_.stop();
     charging(false);
+    rain(false);
     if (scene == "playing") {
         if (const auto *buffer = resources_.sound("assets/audio/sfx/sound-effect/people-background-noise.mp3")) {
             ambience_.setBuffer(*buffer);
@@ -94,12 +95,27 @@ void AudioManager::charging(bool active, float seconds) {
         charging_.play();
     }
 }
+void AudioManager::rain(bool active) {
+    if (active == rainActive_) return;
+    rainActive_ = active;
+    if (!active) {
+        rain_.stop();
+        return;
+    }
+    if (const auto *buffer = resources_.sound("assets/audio/sfx/rain_loop.wav")) {
+        rain_.setBuffer(*buffer);
+        rain_.setLoop(true);
+        rain_.setVolume(volume_ * .45f);
+        rain_.play();
+    }
+}
 void AudioManager::update(float musicVolume, float soundVolume) {
     volume_ = soundVolume;
     musicVolume_ = musicVolume;
     music_.setVolume(musicVolume_);
     ambience_.setVolume(volume_ * .35f);
     charging_.setVolume(volume_ * .85f);
+    rain_.setVolume(volume_ * .45f);
     sounds_.erase(std::remove_if(sounds_.begin(), sounds_.end(),
                                  [](const auto &s) { return s->getStatus() == sf::Sound::Stopped; }),
                   sounds_.end());

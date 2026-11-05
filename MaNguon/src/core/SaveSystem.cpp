@@ -110,6 +110,11 @@ Progress SaveSystem::load(const GameData &d) {
             p.lastDaily = j.value("last_daily", static_cast<std::int64_t>(-1));
             p.tutorialDone = j.value("tutorial_done", false);
             p.fullscreen = j.value("fullscreen", false);
+            // Bản lưu cũ không có các khóa mới: người đã chơi coi như đã xem hướng dẫn, kho giữ hàng khai trương.
+            p.guideDone = j.value("guide_done", p.day > 1 || p.served > 0);
+            p.todayCost = std::clamp(j.value("today_cost", 0), 0, 1000000000);
+            if (const auto seed = j.find("world_seed"); seed != j.end() && seed->is_number_unsigned())
+                p.worldSeed = seed->get<std::uint32_t>();
             if (const auto earned = j.find("achievements"); earned != j.end() && earned->is_array()) {
                 std::set<std::string> known;
                 for (const auto &info : AchievementSystem::all()) known.insert(info.id);
@@ -128,6 +133,12 @@ Progress SaveSystem::load(const GameData &d) {
                 const auto it = levels.find(u.id);
                 if (it != levels.end())
                     p.levels[u.id] = std::clamp(it->second, 0, static_cast<int>(u.levels.size()));
+            }
+            if (const auto stock = j.find("stock"); stock != j.end() && stock->is_object()) {
+                p.stock.clear();
+                for (auto it = stock->begin(); it != stock->end(); ++it)
+                    if (p.unlocked.count(it.key()) && it.value().is_number_integer())
+                        p.stock[it.key()] = std::clamp(it.value().get<int>(), 0, 1000);
             }
             loadReviews(j, p);
             error_ = std::string(name) == "save.bak" ? "Đã phục hồi bản lưu dự phòng." : "";
@@ -154,7 +165,9 @@ bool SaveSystem::write(const Progress &p) {
                             {"rush_served", p.rushServed},     {"goals_done", p.goalsDone},
                             {"perfect_days", p.perfectDays},   {"daily_streak", p.dailyStreak},
                             {"last_daily", p.lastDaily},       {"tutorial_done", p.tutorialDone},
-                            {"fullscreen", p.fullscreen},      {"achievements", p.achievements}};
+                            {"fullscreen", p.fullscreen},      {"achievements", p.achievements},
+                            {"guide_done", p.guideDone},       {"stock", p.stock},
+                            {"today_cost", p.todayCost},       {"world_seed", p.worldSeed}};
         j["reviews"] = nlohmann::json::array();
         const std::size_t first = p.reviews.size() > 100 ? p.reviews.size() - 100 : 0;
         for (std::size_t i = first; i < p.reviews.size(); ++i) {

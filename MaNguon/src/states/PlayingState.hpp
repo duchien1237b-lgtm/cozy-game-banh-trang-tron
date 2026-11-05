@@ -3,6 +3,8 @@
 #include "states/UiState.hpp"
 #include "ui/Effects.hpp"
 #include "ui/CookingEffects.hpp"
+#include "ui/Atmosphere.hpp"
+#include "gameplay/CustomerMood.hpp"
 #include <deque>
 namespace tiem {
 class PlayingState final : public UiState {
@@ -50,8 +52,28 @@ class PlayingState final : public UiState {
     void drawOverlays(sf::RenderTarget &);
     void drawBriefing(sf::RenderTarget &);
     void drawReviewCard(sf::RenderTarget &);
+    void drawDepartures(sf::RenderTarget &);
+    void drawScene(sf::RenderTarget &, bool scene);
+    void restock();
+    void depart(const Customer &, Expression, std::string line, bool served);
+    std::size_t queueSlots() const;
 
     DaySession day_;
+    ui::Atmosphere atmosphere_;
+    // Khách rời quầy (đã nhận món hoặc bỏ về) diễn nốt biểu cảm trước khi biến mất.
+    struct Departure {
+        std::size_t kind{}, personality{}, slots{};
+        Expression expression{Expression::Neutral};
+        std::string line;
+        sf::FloatRect area;
+        float age{};
+        bool served{true};
+        unsigned seed{};
+    };
+    std::vector<Departure> departures_;
+    Weather lastWeather_{Weather::Sunny};
+    int lastHourMark_{-1};
+    unsigned mixSeed_{};
     Bowl bowl_;
     std::unique_ptr<PaperTearing> paper_;
     std::unique_ptr<MixingMinigame> mix_;

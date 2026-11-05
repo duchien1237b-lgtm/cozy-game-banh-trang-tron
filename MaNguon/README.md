@@ -1,4 +1,4 @@
-# Bánh Tráng Trộn Tiệm — 1.0
+# Bánh Tráng Trộn Tiệm — v3
 
 Game quản lý quán bánh tráng trộn bằng **C++17 / SFML 2.6.2**. Bản này đã nối đầy đủ vòng chơi, không còn các màn hình thử của từng mốc. Đồ họa dùng bộ sprite Cozy và nền đường phố riêng cho menu, màn chơi; nhạc nền do người dùng cung cấp và SFX đã kèm, không cần tải thêm tài nguyên để chơi.
 
@@ -8,16 +8,29 @@ Giải nén **toàn bộ** gói tải xuống, mở `GocNhoBanhTrang.exe` ở th
 
 Bản có sẵn dành cho Windows x64. Mã nguồn trong `MaNguon/` dành cho việc sửa và build lại; không cần chép đè lên thư mục mốc 1 hoặc 2.
 
+## Có gì mới trong bản v3
+
+- **Lần đầu chơi có hướng dẫn**: 7 trang, có phần tập xé bánh, thêm topping và trộn ngay trong hướng dẫn. Bấm *Bỏ qua* nếu đã biết chơi; xem lại bằng nút **Cách chơi** ở menu.
+- **Chuẩn bị nguyên liệu trước mỗi ngày**: xem dự báo thời tiết, số khách dự kiến, rồi nhập hàng (giá vốn bằng 50% giá bán, tối đa 60 phần mỗi loại). Nút *Gợi ý nhập* tự tính theo nhu cầu. Hết hàng giữa ngày vẫn *Nhập gấp* được 5 phần với giá gấp đôi. Hàng tươi (rau, trứng cút...) hỏng một phần nếu để qua đêm.
+- **Thời tiết nắng / nhiều mây / mưa**: có thể đổi giữa ngày (mưa rào). Nắng đông khách hơn nhưng khách mau sốt ruột; mưa vắng khách, khách kiên nhẫn hơn và tip thêm. Mưa có hiệu ứng hạt mưa và tiếng mưa.
+- **Một ngày từ 7:00 đến 21:00**: đồng hồ trên HUD, bầu trời chuyển sáng sớm, trưa, hoàng hôn rồi tối dần, quán lên đèn. Giờ trưa và giờ tan tầm đông khách hơn.
+- **Nhịp trộn ngẫu nhiên**: mỗi nhịp đổi kiểu chạy (đều, nhanh, chậm, chập chờn, đảo chiều) và độ rộng vùng xanh.
+- **Khách có tính cách và biểu cảm**: 7 tính cách (điềm đạm, vui vẻ, nóng tính, khó tính, hào phóng, dễ tính, nói nhiều) ảnh hưởng kiên nhẫn, tip và độ khắt khe. Mặt khách đổi theo thời gian chờ (vui, chán, lo, giận...) và phản ứng khi nhận món.
+- **Bảng kết quả cuối ngày mới**: xếp hạng S–D, sổ thu chi (doanh thu, tip, tiền thời tiết, tiền nhập hàng, hàng hỏng, lãi ròng), biểu đồ khách theo giờ, khách nổi bật trong ngày.
+
+Bản lưu cũ vẫn mở được; người chơi cũ không bị bắt xem lại hướng dẫn.
+
 ## Cách chơi
 
-- **Mở quán**: mỗi ngày dài 180 giây (3 phút). Chọn khách bằng chuột; mỗi đơn có 3–6 loại nguyên liệu và 1–3 muỗng/loại tùy khách, số ngày và topping đã mở.
+- **Chuẩn bị**: trước mỗi ngày nhập nguyên liệu ở màn Chuẩn bị; topping trong kho mới dùng được.
+- **Mở quán**: mỗi ngày dài 180 giây (3 phút), tương ứng 7:00–21:00 trong game. Chọn khách bằng chuột; mỗi đơn có 3–6 loại nguyên liệu và 1–3 muỗng/loại tùy khách, số ngày và topping đã mở.
 - **Xé bánh**: nhấn giữ và rê tự do qua lại trên bánh. Sau 1,5 giây bánh thành dải, sau thêm 1,5 giây thành miếng nhỏ theo hai ảnh mới; thả chuột để sang thêm topping. Thả sớm hoặc rời bánh sẽ tạm dừng và giữ tiến độ; giữ yên không tăng tiến độ.
 - **Thêm topping**: bấm chọn khay, nhấn giữ trên tô và thả chuột. Thanh lực chia ba mức tương ứng 1–3 muỗng; giữ tối đa 1,2 giây. Rê khỏi tô hoặc tạm dừng để hủy lượt giữ; bấm quá nhanh không thêm topping. Dòng trong tô / cần làm đối chiếu với khách đang chọn.
 - **Rưới sốt**: chọn chai rồi giữ và thả trên tô theo cùng thanh lực 1–3 muỗng; mỗi lượt thả chỉ thêm một lần.
-- **Trộn**: bấm Trộn món, sau đó bấm thanh hoặc nút Đánh nhịp khi vạch vào xanh. Vùng xanh đổi vị trí sau mỗi nhịp được nhận, kể cả nhịp trượt. Đủ ba nhịp thì có thể giao.
+- **Trộn**: bấm Trộn món, sau đó bấm thanh hoặc nút Đánh nhịp khi vạch vào xanh. Vùng xanh đổi vị trí, độ rộng và kiểu chạy ngẫu nhiên sau mỗi nhịp, kể cả nhịp trượt. Đủ ba nhịp thì có thể giao.
 - **Giao**: kéo tô đến khách hoặc bấm Giao món. Nhận xét, điểm /100 và 1–5 sao hiện giữa màn hình rồi mờ đi sau 3,5 giây. Điểm = công thức 50%, xé 20%, trộn 20%, tốc độ 10%; thiếu, thừa và sai loại đều giảm điểm.
 - **Làm lại tô**: bỏ tô hiện tại và xé tờ mới. Sau khi đã trộn không thêm được topping.
-- **Cuối ngày**: xem tiền món, tip, khách đã phục vụ/bỏ về và sao; mua nâng cấp hoặc mở topping, rồi mở ngày tiếp theo.
+- **Cuối ngày**: xem hạng S–D, sổ thu chi, lãi ròng và biểu đồ khách theo giờ; mua nâng cấp hoặc mở topping, rồi chuẩn bị ngày tiếp theo.
 - **ESC / Tạm dừng**: dừng cả khách và đồng hồ. Chuyển sang ứng dụng khác cũng tự tạm dừng. Menu Cài đặt có hai thanh âm lượng độc lập.
 
 Ban đầu có bánh tráng nền và năm topping. Tám topping còn lại mua bằng tiền trong game. Có sáu kiểu khách, tám loại nâng cấp, phân trang khay và cửa hàng. Khách đến nhanh hơn và đơn phức tạp hơn theo ngày; tối đa bốn chỗ chờ khi nâng cấp.
@@ -42,10 +55,15 @@ Có `save.bak`; file JSON hỏng được giữ lại với hậu tố `.corrupt
 | `src/core/SaveSystem.*` | JSON tiến trình, ghi tạm, bản dự phòng, phục hồi |
 | `src/core/AudioManager.*` | Nhạc lặp, âm lượng, pool hiệu ứng và vòng đời buffer |
 | `src/gameplay/Model.*` | Customer, Order, Topping, Bowl, DaySession, UpgradeSystem, EconomySystem |
-| `src/gameplay/Minigames.*` | PaperTearing, MixingMinigame, tính chất lượng thao tác |
-| `src/states/` | MainMenu, Playing, Pause/Settings, DayResult/UpgradeShop |
+| `src/gameplay/Minigames.*` | PaperTearing, MixingMinigame (nhịp ngẫu nhiên), tính chất lượng thao tác |
+| `src/gameplay/Weather.*` | WeatherSystem: dự báo, mưa rào giữa ngày, ảnh hưởng tới khách/tip |
+| `src/gameplay/DayClock.*` | Giờ 7:00–21:00, lưu lượng khách theo giờ, ánh sáng trời |
+| `src/gameplay/Inventory.*` | InventorySystem: giá vốn, nhập hàng, nhập gấp, hàng hỏng, gợi ý nhập |
+| `src/gameplay/CustomerMood.*` | Biểu cảm và câu thoại theo tính cách khách |
+| `src/ui/Atmosphere.*` | Mưa, mây, chuyển sáng/tối, đèn quán, emote khách |
+| `src/states/` | MainMenu, Tutorial, Prep, Playing, Pause/Settings, DayReport, UpgradeShop |
 | `src/ui/` | Button, ProgressBar, FloatingText, Tooltip, hạt và đồ họa hình khối |
-| `data/` | Cấu hình cửa sổ, cân bằng, topping, khách, nâng cấp |
+| `data/` | Cấu hình cửa sổ, cân bằng, topping, khách, tính cách khách (`personalities.json`), nâng cấp |
 | `assets/` | Font có dấu, nhạc và SFX; chỗ dành cho PNG |
 | `tests/CoreTests.cpp` | Kiểm thử tính điểm, giao dịch, save, minigame, input và vòng đời state |
 | `tools/generate_audio.py` | Mã tạo lại nhạc/SFX gốc; cần Python + NumPy, không cần khi chơi/build |
@@ -53,6 +71,8 @@ Có `save.bak`; file JSON hỏng được giữ lại với hậu tố `.corrupt
 ## Build từ source (không cần nếu dùng executable có sẵn)
 
 Cần CMake >= 3.16 và compiler C++17. Lần cấu hình đầu cần Internet để FetchContent tải **SFML 2.6.2** và **nlohmann/json 3.11.3** với SHA-256 cố định. Giữ toàn bộ cây source; font đã có sẵn.
+
+Không có Internet? Thêm `-DTIEM_USE_SYSTEM_DEPS=ON` để dùng SFML 2.5+ và nlohmann_json đã cài sẵn (ví dụ `sudo apt install libsfml-dev nlohmann-json3-dev`). Trên Windows ở chế độ này, chỉ đường dẫn `openal32.dll` bằng `-DTIEM_OPENAL_DLL=...`.
 
 ### Windows — MinGW-w64
 

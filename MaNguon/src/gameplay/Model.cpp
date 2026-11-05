@@ -4,8 +4,8 @@
 #include <fstream>
 #include <ctime>
 #include <limits>
-#include <ostream>
 #include <stdexcept>
+#include "gameplay/Inventory.hpp"
 namespace tiem {
 namespace {
 nlohmann::json read(const std::filesystem::path &path) {
@@ -70,7 +70,7 @@ GameData::GameData(const std::filesystem::path &root) {
     const auto customerData = read(root / "data/customers.json");
     for (const auto &j : customerData.at("customers")) {
         CustomerKind k{j.at("id"), j.at("name"), j.at("style"), color(j.at("color")),
-                       j.at("patience_factor")};
+                       j.at("patience_factor"), false, false, 1.f, 4, 6, 1, 3, false, false, {}};
         k.femaleVoice = j.value("female_voice", false);
         k.child = j.value("is_child", false);
         k.olderAdult = j.value("is_older_adult", false);
@@ -80,6 +80,8 @@ GameData::GameData(const std::filesystem::path &root) {
         k.maxTypes = j.value("order_max_types", integer("order_max_types"));
         k.minQuantity = j.value("order_min_quantity", 1);
         k.maxQuantity = j.value("order_max_quantity", integer("order_max_quantity"));
+        if (const auto list = j.find("personalities"); list != j.end() && list->is_array())
+            for (const auto &id : *list) k.personalities.push_back(id.get<std::string>());
         if (k.id.empty() || !ids.insert(k.id).second || k.patienceFactor <= 0 ||
             !std::isfinite(k.spawnWeight) || k.spawnWeight <= 0 ||
             k.minTypes < 3 || k.maxTypes < k.minTypes || k.maxTypes > integer("order_max_types") ||
@@ -87,6 +89,53 @@ GameData::GameData(const std::filesystem::path &root) {
             throw std::runtime_error("Khach khong hop le");
         customers.push_back(k);
     }
+    ids.clear();
+    // Tính cách khách là dữ liệu tùy chọn: thiếu file vẫn chạy với một tính cách trung tính.
+    if (std::filesystem::exists(root / "data/personalities.json")) {
+        const auto personalityData = read(root / "data/personalities.json");
+        const auto lines = [](const nlohmann::json &j, const char *key) {
+            std::vector<std::string> out;
+            if (const auto it = j.find(key); it != j.end() && it->is_array())
+                for (const auto &v : *it) out.push_back(v.get<std::string>());
+            return out;
+        };
+        for (const auto &j : personalityData.at("personalities")) {
+            Personality p;
+            p.id = j.at("id");
+            p.name = j.at("name");
+            p.trait = j.value("trait", "");
+            if (j.contains("color")) p.color = color(j.at("color"));
+            p.weight = j.value("weight", 1.f);
+            p.patience = j.value("patience", 1.f);
+            p.tip = j.value("tip", 1.f);
+            p.strict = j.value("strict", 1.f);
+            p.fastTip = j.value("fast_tip", 0.f);
+            p.angerAt = j.value("anger_at", .3f);
+            p.worryAt = j.value("worry_at", .5f);
+            p.cheerful = j.value("cheerful", false);
+            p.calm = j.value("calm", false);
+            p.greet = lines(j, "greet");
+            p.waiting = lines(j, "waiting");
+            p.hurry = lines(j, "hurry");
+            p.happy = lines(j, "happy");
+            p.sad = lines(j, "sad");
+            if (p.id.empty() || !ids.insert(p.id).second || p.weight <= 0 || p.patience <= 0 || p.tip < 0 ||
+                p.strict <= 0 || p.fastTip < 0 || p.angerAt < 0 || p.worryAt < p.angerAt || p.worryAt > 1)
+                throw std::runtime_error("Tinh cach khach khong hop le");
+            personalities.push_back(std::move(p));
+        }
+    }
+    if (personalities.empty()) {
+        Personality neutral;
+        neutral.id = "neutral";
+        neutral.name = "Bình thường";
+        neutral.greet = {"Cho mình một phần bánh tráng!"};
+        personalities.push_back(neutral);
+    }
+    for (const auto &k : customers)
+        for (const auto &id : k.personalities)
+            if (!ids.count(id) && personalities.front().id != "neutral")
+                throw std::runtime_error("Khach tham chieu tinh cach khong ton tai: " + id);
     ids.clear();
     const auto upgradeData = read(root / "data/upgrades.json");
     for (const auto &j : upgradeData.at("upgrades")) {
@@ -134,15 +183,35 @@ const Topping &GameData::topping(const std::string &id) const {
         throw std::runtime_error("ID topping khong ton tai: " + id);
     return *it;
 }
+std::size_t GameData::personalityIndex(const std::string &id) const {
+    for (std::size_t i = 0; i < personalities.size(); ++i)
+        if (personalities[i].id == id) return i;
+    return 0;
+}
 Progress Progress::fresh(const GameData &d) {
     Progress p;
     p.money = d.integer("initial_money");
     p.music = d.number("default_music");
     p.sfx = d.number("default_sfx");
+    // Hàng khai trương: vài muỗng mỗi loại ban đầu để ngày đầu không trắng tay.
+    const int starter = std::max(0, static_cast<int>(d.numberOr("starter_stock", 8.f)));
     for (const auto &t : d.toppings)
-        if (t.initial)
+        if (t.initial) {
             p.unlocked.insert(t.id);
+            if (starter > 0) p.stock[t.id] = starter;
+        }
+    p.worldSeed = static_cast<std::uint32_t>(std::random_device{}()) | 1u;
     return p;
+}
+char DayResult::grade() const {
+    if (served == 0) return 'D';
+    const float r = rating();
+    const float lost = static_cast<float>(left) / static_cast<float>(served + left);
+    if (r >= 4.5f && left == 0) return 'S';
+    if (r >= 4.0f && lost <= .15f) return 'A';
+    if (r >= 3.2f) return 'B';
+    if (r >= 2.4f) return 'C';
+    return 'D';
 }
 bool Bowl::add(const std::string &id, int capacity) {
     if (static_cast<int>(portions.size()) >= capacity || mixed)
@@ -160,21 +229,6 @@ bool Bowl::removeLast(std::string *removed) {
 }
 int Bowl::count(const std::string &id) const {
     return static_cast<int>(std::count(portions.begin(), portions.end(), id));
-}
-bool operator==(const Bowl &bowl, const Order &order) {
-    if (bowl.portions.empty())
-        return false;
-    int total = 0;
-    for (const auto &item : order.recipe) {
-        if (bowl.count(item.first) != item.second)
-            return false;
-        total += item.second;
-    }
-    return static_cast<int>(bowl.portions.size()) == total;
-}
-std::ostream &operator<<(std::ostream &out, const Receipt &r) {
-    return out << "Công thức " << static_cast<int>(r.recipe * 100) << "% • Xé " << static_cast<int>(r.paper * 100)
-               << "% • Trộn " << static_cast<int>(r.mix * 100) << "% • Tốc độ " << static_cast<int>(r.speed * 100) << "%";
 }
 int Receipt::stars() const {
     return std::clamp(static_cast<int>(std::lround(1.f + 4.f * std::clamp(score, 0.f, 1.f))), 1, 5);
@@ -331,9 +385,11 @@ Receipt EconomySystem::score(const GameData &d, const Progress &p, const Custome
     }
     for (const auto &pair : actual)
         difference += pair.second;
+    const auto &persona = d.personalities.at(std::min(c.personality, d.personalities.size() - 1));
     Receipt r;
+    // Khách kỹ tính (strict > 1) trừ điểm công thức nặng hơn cho mỗi muỗng sai.
     r.recipe =
-        std::clamp(1.f - static_cast<float>(difference) /
+        std::clamp(1.f - persona.strict * static_cast<float>(difference) /
                              static_cast<float>(std::max({1, required, static_cast<int>(b.portions.size())})),
                    0.f, 1.f);
     r.paper = std::clamp(b.paperQuality, 0.f, 1.f);
@@ -349,8 +405,9 @@ Receipt EconomySystem::score(const GameData &d, const Progress &p, const Custome
              100;
     const float tips = d.number("tip_rate") + UpgradeSystem::effect(d, p, "decor") +
                        UpgradeSystem::effect(d, p, "lantern") + UpgradeSystem::effect(d, p, "curtain");
+    const float fast = r.speed >= .6f ? persona.fastTip : 0.f;
     r.tip =
-        static_cast<int>(std::round(static_cast<float>(c.order.price) * tips * r.score * r.score / 100.f)) *
+        static_cast<int>(std::round(static_cast<float>(c.order.price) * (tips * persona.tip * r.score * r.score + fast * r.score) / 100.f)) *
         100;
     if (d.customers.at(c.kind).special) r.tip = c.order.price;
     return r;
@@ -459,13 +516,15 @@ std::vector<DayGoal> DaySession::makeGoals(const GameData &d, int day) {
     std::shuffle(pool.begin(), pool.end(), rng);
     pool.resize(3);
     // Mục tiêu dễ nhất hiện đầu danh sách để người chơi có động lực.
-    std::sort(pool.begin(), pool.end());
+    std::sort(pool.begin(), pool.end(), [](const DayGoal &a, const DayGoal &b) { return a.reward < b.reward; });
     return pool;
 }
 DaySession::DaySession(const GameData &d, Progress &p, unsigned seed)
     : data_(d), progress_(p), random_(seed), reviewRandom_(seed ^ 0xA511E9B3u),
-      remaining_(d.number("day_seconds")) {
+      remaining_(d.number("day_seconds")), weather_(WeatherSystem::forecast(p.worldSeed, p.day)),
+      clock_(d.number("day_seconds")), moodRandom_(seed * 747796405u + 2891336453u) {
     result_.day = p.day;
+    result_.weather = weather_;
     result_.goals = makeGoals(d, p.day);
     // Giờ cao điểm dùng bộ sinh riêng để không làm lệch chuỗi khách theo seed.
     std::mt19937 rushRandom(seed * 2654435761u + 17u);
@@ -493,16 +552,39 @@ void DaySession::spawn() {
     std::vector<float> weights;
     for (const auto &kind : data_.customers) weights.push_back(kind.spawnWeight);
     c.kind = std::discrete_distribution<std::size_t>(weights.begin(), weights.end())(random_);
-    c.patience = (std::max(data_.number("patience_min_seconds"),
-                           data_.number("patience_seconds") / difficultyMultiplier(data_, result_.day)) +
-                  UpgradeSystem::effect(data_, progress_, "patience")) *
-                 data_.customers[c.kind].patienceFactor;
+    c.basePatience = (std::max(data_.number("patience_min_seconds"),
+                               data_.number("patience_seconds") / difficultyMultiplier(data_, result_.day)) +
+                      UpgradeSystem::effect(data_, progress_, "patience")) *
+                     data_.customers[c.kind].patienceFactor;
+    // Tính cách: kiểu khách có danh sách ưa thích (trọng số ×3); bốc bằng bộ sinh riêng để không lệch đơn hàng.
+    {
+        std::vector<float> personalityWeights;
+        const auto &liked = data_.customers[c.kind].personalities;
+        for (const auto &persona : data_.personalities)
+            personalityWeights.push_back(persona.weight *
+                (std::find(liked.begin(), liked.end(), persona.id) != liked.end() ? 3.f : 1.f));
+        c.personality = std::discrete_distribution<std::size_t>(personalityWeights.begin(), personalityWeights.end())(moodRandom_);
+        c.lineSeed = static_cast<unsigned>(moodRandom_());
+    }
+    const auto nowWeather = WeatherSystem::effect(weather_.at(clock_.progress(remaining_)));
+    c.patience = c.basePatience * data_.personalities[c.personality].patience * nowWeather.patience;
     c.remaining = c.patience;
     std::vector<std::string> available;
     for (const auto &t : data_.toppings)
         if (progress_.unlocked.count(t.id))
             available.push_back(t.id);
     std::shuffle(available.begin(), available.end(), random_);
+    // Thời tiết đổi khẩu vị: nắng chuộng đồ tươi, mưa chuộng đồ khô/sốt (xếp ưu tiên có trọng số).
+    if (std::abs(nowWeather.freshBias) > .001f) {
+        std::vector<std::pair<float, std::string>> keyed;
+        for (const auto &id : available) {
+            const float w = WeatherSystem::toppingWeight(data_.topping(id).type, nowWeather.freshBias);
+            const float u = std::uniform_real_distribution<float>(1e-4f, 1.f)(moodRandom_);
+            keyed.push_back({-std::log(u) / w, id});
+        }
+        std::sort(keyed.begin(), keyed.end());
+        for (std::size_t i = 0; i < keyed.size(); ++i) available[i] = keyed[i].second;
+    }
     const auto &kind = data_.customers[c.kind];
     // Start with one spoon per preferred type. Extra workload has a strict daily budget.
     const int baseTypes = std::min(kind.minTypes, static_cast<int>(available.size()));
@@ -544,10 +626,13 @@ void DaySession::update(float dt) {
         c.arrival = std::min(1.f, c.arrival + dt * 4);
     }
     const auto old = customers_.size();
+    for (const auto &c : customers_)
+        if (c.remaining <= 0) departed_.push_back(c);
     customers_.erase(
         std::remove_if(customers_.begin(), customers_.end(), [](const auto &c) { return c.remaining <= 0; }),
         customers_.end());
     result_.left += static_cast<int>(old - customers_.size());
+    result_.leftByHour[static_cast<std::size_t>(clock_.slot(remaining_))] += static_cast<int>(old - customers_.size());
     if (old != customers_.size()) combo_ = 0;
     if (remaining_ <= 0) {
         finish();
@@ -558,7 +643,9 @@ void DaySession::update(float dt) {
     rushActive_ = inRush;
     // Giờ cao điểm: khách đến dày hơn (giới hạn vẫn là số chỗ chờ).
     const float speedUp = rushActive_ ? data_.numberOr("rush_spawn_factor", 1.8f) : 1.f;
-    spawnTimer_ -= dt * speedUp;
+    // Thời tiết và khung giờ trong ngày cũng đổi nhịp khách.
+    const float ambient = WeatherSystem::effect(weather()).spawn * DayClock::trafficFactor(hour());
+    spawnTimer_ -= dt * speedUp * ambient;
     if (spawnTimer_ <= 0) {
         spawn();
         spawnTimer_ = std::max(data_.number("spawn_min_seconds"),
@@ -583,12 +670,24 @@ Receipt DaySession::serve(std::size_t index, const Bowl &bowl) {
         if (rushActive_)
             receipt.rushBonus = static_cast<int>(std::round(static_cast<float>(receipt.base) *
                                      data_.numberOr("rush_bonus", .2f) / 100.f)) * 100;
-        receipt.tip += receipt.comboBonus + receipt.rushBonus;
+        // Khách trú mưa thường bo thêm.
+        receipt.weatherBonus = static_cast<int>(std::round(static_cast<float>(receipt.base) *
+                                   WeatherSystem::effect(weather()).tip / 100.f)) * 100;
+        receipt.tip += receipt.comboBonus + receipt.rushBonus + receipt.weatherBonus;
     }
     result_.revenue += receipt.base;
     result_.tips += receipt.tip;
     result_.comboBonus += receipt.comboBonus;
     result_.rushBonus += receipt.rushBonus;
+    result_.weatherBonus += receipt.weatherBonus;
+    ++result_.servedByHour[static_cast<std::size_t>(clock_.slot(remaining_))];
+    if (receipt.score > result_.bestScore) {
+        result_.bestScore = receipt.score;
+        result_.bestKind = customers_[index].kind;
+        result_.bestPersonality = customers_[index].personality;
+    }
+    if (receipt.stars() >= 5) ++result_.delighted;
+    else if (receipt.stars() <= 2) ++result_.unhappy;
     result_.bestCombo = std::max(result_.bestCombo, combo_);
     ++result_.served;
     result_.scoreSum += receipt.score;
@@ -626,6 +725,13 @@ void DaySession::finish() {
     ended_ = true;
     remaining_ = 0;
     result_.left += static_cast<int>(customers_.size());
+    result_.leftByHour[DayClock::hours - 1] += static_cast<int>(customers_.size());
+    // Thu chi nguyên liệu: tiền nhập hàng trong ngày và đồ tươi bỏ đi lúc đóng cửa.
+    result_.ingredientCost = progress_.todayCost;
+    progress_.todayCost = 0;
+    const auto spoiled = InventorySystem::spoil(data_, progress_);
+    result_.spoiledPortions = spoiled.portions;
+    result_.spoiledValue = spoiled.value;
     customers_.clear();
     combo_ = 0;
     rushActive_ = false;

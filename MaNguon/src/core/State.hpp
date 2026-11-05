@@ -9,7 +9,7 @@ struct AppConfig;
 class StateStack;
 struct GameServices;
 class AudioManager;
-enum class StateID { MainMenu, Playing, DayResult, UpgradeShop, Pause, Settings, Reviews, Achievements, DailyReward };
+enum class StateID { MainMenu, Playing, DayResult, UpgradeShop, Pause, Settings, Reviews, Achievements, DailyReward, Prep, Tutorial };
 using Pointer = std::optional<sf::Vector2f>;
 
 struct AppContext {

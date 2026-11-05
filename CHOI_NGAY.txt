@@ -1,15 +1,17 @@
-GÓC NHỎ BÁNH TRÁNG - WINDOWS x64
+GÓC NHỎ BÁNH TRÁNG — WINDOWS x64
 
 Mở GocNhoBanhTrang.exe để chơi.
 Giữ assets/, data/ và openal32.dll cạnh file chạy.
 Không cần CMake, MinGW hoặc VS Code để chơi bản có sẵn.
 
-* CÁCH CHƠI
+CÁCH CHƠI
+Lần đầu mở game sẽ có phần hướng dẫn kèm luyện tập (bấm Bỏ qua nếu đã biết).
+0. Trước mỗi ngày: xem dự báo thời tiết, nhập nguyên liệu rồi bấm Nhập hàng & mở quán.
 1. Giữ và rê qua lại trên bánh để xé, rồi thả chuột để cho vào tô.
-2. Chọn nguyên liệu, giữ trên tô để tích lực 1-3 muỗng rồi thả.
-3. Bấm Trộn món, canh vùng xanh rồi đánh đủ ba nhịp.
-4. Chọn khách và giao món, hoặc kéo tô đến khách. Đánh giá hiện giữa màn.
-ESC để tạm dừng. Đọc hướng dẫn chi tiết trong Cài đặt → Cách chơi.
+2. Chọn nguyên liệu, giữ trên tô để tích lực 1–3 muỗng rồi thả.
+3. Bấm Trộn món, canh vùng xanh rồi đánh đủ ba nhịp (mỗi nhịp chạy một kiểu khác).
+4. Chọn khách và Giao món, hoặc kéo tô đến khách. Đánh giá hiện giữa màn.
+ESC để tạm dừng. Xem lại hướng dẫn bằng nút Cách chơi ở menu.
 
 Tiếp tục mở quán ngày N để chơi tiếp.
 Chơi lại từ đầu yêu cầu xác nhận trước khi đặt lại tiến trình.

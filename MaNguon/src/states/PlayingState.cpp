@@ -1,6 +1,7 @@
 #include "states/PlayingState.hpp"
 #include "core/Utf8.hpp"
 #include "ui/Art.hpp"
+#include "gameplay/Inventory.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -62,6 +63,8 @@ PlayingState::PlayingState(StateStack &stack, AppContext &context)
         say("Tô mới đã sẵn sàng. Xé bánh tráng trước nhé!");
     });
     addButton("Bỏ muỗng cuối", {474, 590, 152, 32}, [this] { undoPortion(); });
+    // Nút 6: nhập gấp 5 muỗng (giá gấp đôi) khi topping đang chọn hết hàng.
+    addButton("Nhập gấp", {474, 628, 152, 32}, [this] { restock(); });
     startButton_ = std::make_unique<ui::Button>(context_.resources.uiFont(), "Mở cửa!",
                                                 sf::FloatRect(500, 536, 280, 54), [this] { startDay(); });
     startButton_->setResources(context_.resources);
@@ -77,12 +80,42 @@ PlayingState::PlayingState(StateStack &stack, AppContext &context)
     skipTutorial_->setClickSound(context_.playClick);
     tutorial_ = !game().progress.tutorialDone;
     walletShown_ = static_cast<float>(game().progress.money);
+    mixSeed_ = static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count() >> 7);
+    lastWeather_ = day_.weather();
+    atmosphere_.update(10.f, lastWeather_, day_.hour());
     resetBowl();
     refreshButtons();
     message_ = "Giữ và rê qua lại trên bánh để xé.";
 }
 PlayingState::~PlayingState() {
-    if (context_.audio) context_.audio->charging(false);
+    if (context_.audio) {
+        context_.audio->charging(false);
+        context_.audio->rain(false);
+    }
+}
+std::size_t PlayingState::queueSlots() const {
+    return static_cast<std::size_t>(std::min(game().data.integer("queue_max"),
+        game().data.integer("queue_slots") + static_cast<int>(UpgradeSystem::effect(game().data, game().progress, "queue"))));
+}
+void PlayingState::restock() {
+    if (!selectedTopping_ || stage_ != Stage::Toppings) return;
+    const auto &t = game().data.toppings[*selectedTopping_];
+    const int bought = InventorySystem::buy(game().data, game().progress, t.id, 5, true);
+    if (bought == 0) {
+        say("Không đủ tiền nhập gấp " + t.name + " (" + moneyText(InventorySystem::rushCost(game().data, t) * 5) + ").");
+        return;
+    }
+    sound("upgrade_buy");
+    effects_.say("+" + std::to_string(bought) + " " + t.name, {550, 600}, ui::Theme{}.green, 1.6f, 20, true);
+    say("Đã nhập gấp " + std::to_string(bought) + " muỗng " + t.name + " (giá gấp đôi).");
+    game().save();
+    refreshButtons();
+}
+void PlayingState::depart(const Customer &c, Expression expression, std::string line, bool served) {
+    std::size_t index = 0;
+    for (std::size_t i = 0; i < day_.customers().size(); ++i)
+        if (day_.customers()[i].id == c.id) index = i;
+    departures_.push_back({c.kind, c.personality, queueSlots(), expression, std::move(line), customerArea(index), 0.f, served, c.lineSeed});
 }
 void PlayingState::say(std::string text) {
     message_ = std::move(text);
@@ -95,7 +128,7 @@ void PlayingState::startDay() {
     if (!briefing_) return;
     briefing_ = false;
     sound("whoosh");
-    banner("Ngày " + std::to_string(game().progress.day), "Mở cửa nào!", {255, 244, 207}, 1.9f);
+    banner("Ngày " + std::to_string(game().progress.day), "07:00 • Mở cửa nào!", {255, 244, 207}, 1.9f);
     say("Chọn khách để xem đơn, rồi xé bánh tráng nhé!");
 }
 void PlayingState::resetBowl() {
@@ -190,6 +223,15 @@ void PlayingState::refreshButtons() {
     buttons_[3].setEnabled(drops_.empty() && stage_ != Stage::Paper && (stage_ != Stage::Toppings || !bowl_.portions.empty()) &&
                            (stage_ != Stage::Ready || !day_.customers().empty()));
     buttons_[5].setEnabled(stage_ == Stage::Toppings && !bowl_.portions.empty() && drops_.empty() && !charge_.active());
+    if (buttons_.size() > 6) {
+        const bool empty = stage_ == Stage::Toppings && selectedTopping_ &&
+                           InventorySystem::stock(game().progress, game().data.toppings[*selectedTopping_].id) <= 0;
+        if (empty) {
+            const auto &t = game().data.toppings[*selectedTopping_];
+            buttons_[6].setLabel("Nhập gấp +5 • " + moneyText(InventorySystem::rushCost(game().data, t) * 5));
+        }
+        buttons_[6].setEnabled(empty && !charge_.active() && drops_.empty());
+    }
 }
 void PlayingState::cancelCharge() {
     charge_.cancel();
@@ -225,8 +267,8 @@ void PlayingState::startMix() {
     stage_ = Stage::Mixing;
     mixTrail_.clear();
     mix_ = std::make_unique<MixingMinigame>(
-        game().data, UpgradeSystem::effect(game().data, game().progress, "mix"), game().progress.day);
-    say("Bấm Space (hoặc bấm vào thanh) khi vạch vào vùng xanh. Cần đủ " +
+        game().data, UpgradeSystem::effect(game().data, game().progress, "mix"), game().progress.day, mixSeed_++);
+    say("Bấm Space (hoặc bấm vào thanh) khi vạch vào vùng xanh. Mỗi nhịp đổi kiểu ngẫu nhiên, cần đủ " +
         std::to_string(game().data.integer("mix_hits")) + " nhịp.");
     refreshButtons();
 }
@@ -256,14 +298,23 @@ void PlayingState::hitMix() {
     refreshButtons();
 }
 void PlayingState::addPortions(const std::string &id, int count) {
+    const auto &t = game().data.topping(id);
+    const int inStock = InventorySystem::stock(game().progress, id);
+    if (inStock <= 0) {
+        say("Hết " + t.name + " rồi! Bấm Nhập gấp (giá gấp đôi) hoặc làm món thiếu topping này.");
+        sound("undo");
+        return;
+    }
+    const int wanted = std::min(count, inStock);
     int added = 0;
-    while (added < count && bowl_.add(id, day_.capacity())) ++added;
+    while (added < wanted && bowl_.add(id, day_.capacity())) ++added;
     if (added == 0) {
         say("Tô đã đầy. Hãy trộn hoặc bỏ bớt muỗng.");
         return;
     }
-    const auto &t = game().data.topping(id);
-    say("Đã thêm " + std::to_string(added) + " muỗng " + t.name + (added < count ? ". Tô đã đầy!" : "."));
+    InventorySystem::take(game().progress, id, added);
+    say("Đã thêm " + std::to_string(added) + " muỗng " + t.name +
+        (added < count && wanted < count ? ". Vừa hết hàng trong kho!" : added < count ? ". Tô đã đầy!" : "."));
     // Two icons per actual portion: 2 / 4 / 6, each with its own pop.
     for (int i = 0; i < added * 2; ++i)
         drops_.push_back({id, -static_cast<float>(i) * .13f, i});
@@ -275,6 +326,8 @@ void PlayingState::undoPortion() {
     if (stage_ != Stage::Toppings || !drops_.empty() || charge_.active()) return;
     std::string removed;
     if (!bowl_.removeLast(&removed)) return;
+    // Muỗng chưa trộn thì trả lại kho.
+    InventorySystem::restore(game().data, game().progress, removed, 1);
     sound("undo");
     say("Đã bỏ 1 muỗng " + game().data.topping(removed).name + ".");
     effects_.say("-1 muỗng", {737, 408}, ui::Theme{}.red);
@@ -286,8 +339,10 @@ void PlayingState::selectTray(std::size_t slot) {
     if (index >= available_.size()) return;
     selectedTopping_ = available_[index];
     selectionAge_ = 0;
-    say("Đã chọn " + game().data.toppings[*selectedTopping_].name +
-        ". Giữ chuột trên tô, xem thanh lực rồi thả để thêm.");
+    const auto &chosen = game().data.toppings[*selectedTopping_];
+    const int left = InventorySystem::stock(game().progress, chosen.id);
+    say(left > 0 ? "Đã chọn " + chosen.name + " (còn " + std::to_string(left) + " muỗng). Giữ chuột trên tô rồi thả để thêm."
+                 : chosen.name + " đã hết! Bấm Nhập gấp để mua thêm 5 muỗng.");
     sound("topping_select");
 }
 void PlayingState::collectAchievements() {
@@ -303,7 +358,17 @@ void PlayingState::serve(std::size_t index) {
     const auto &kind = game().data.customers[day_.customers()[index].kind];
     const auto customerName = kind.name;
     const auto happySound = kind.happySound();
+    const Customer servedCustomer = day_.customers()[index];
     const auto receipt = day_.serve(index, bowl_);
+    {
+        const auto &persona = game().data.personalities[servedCustomer.personality];
+        const auto reaction = CustomerMood::reaction(receipt.stars(), persona);
+        const auto &pool = reaction == Expression::Sad || reaction == Expression::Neutral ? persona.sad : persona.happy;
+        std::string line = pool.empty() ? receipt.review() : pool[servedCustomer.lineSeed % pool.size()];
+        if (reaction == Expression::Neutral) line = receipt.review();
+        departures_.push_back({servedCustomer.kind, servedCustomer.personality, queueSlots(), reaction, line,
+                               customerArea(index), 0.f, true, servedCustomer.lineSeed});
+    }
     reviews_.push_back({customerName, receipt});
     effects_.say("+" + moneyText(receipt.base + receipt.tip), {737, 440}, {137, 105, 45}, 2.4f, 25, true);
     effects_.burst({737, 487}, {228, 177, 66});
@@ -321,7 +386,9 @@ void PlayingState::serve(std::size_t index) {
         say("Tuyệt! Bạn đã giao đơn đầu tiên. Cố gắng đúng đơn và giao nhanh để có sao, tip và combo!");
     } else {
         std::ostringstream detail;
-        detail << receipt;
+        detail << "Công thức " << static_cast<int>(receipt.recipe * 100) << "% • Xé "
+               << static_cast<int>(receipt.paper * 100) << "% • Trộn " << static_cast<int>(receipt.mix * 100)
+               << "% • Tốc độ " << static_cast<int>(receipt.speed * 100) << "%";
         say(detail.str());
     }
     collectAchievements();
@@ -337,7 +404,12 @@ std::string PlayingState::stageHint() const {
         const auto &customers = const_cast<PlayingState *>(this)->day_.customers();
         for (const auto &c : customers) {
             if (c.id != selectedId_) continue;
-            if (bowl_ == c.order)
+            bool exact = !bowl_.portions.empty();
+            for (const auto &item : c.order.recipe)
+                if (bowl_.count(item.first) != item.second) exact = false;
+            int total = 0;
+            for (const auto &item : c.order.recipe) total += item.second;
+            if (exact && static_cast<int>(bowl_.portions.size()) == total)
                 return "Đủ đúng đơn rồi! Bấm Trộn món (Space).";
         }
         return selectedTopping_ ? "Giữ chuột trên tô rồi thả để thêm 1-3 muỗng • Phím 1-6: chọn khay"
@@ -435,7 +507,10 @@ bool PlayingState::handleEvent(const sf::Event &event, Pointer mouse) {
                 }
             }
             if (overBowl(*mouse)) {
-                if (selectedTopping_ && static_cast<int>(bowl_.portions.size()) < day_.capacity()) {
+                if (selectedTopping_ && InventorySystem::stock(game().progress, game().data.toppings[*selectedTopping_].id) <= 0) {
+                    say("Hết " + game().data.toppings[*selectedTopping_].name + " trong kho! Bấm Nhập gấp để mua thêm.");
+                    sound("undo");
+                } else if (selectedTopping_ && static_cast<int>(bowl_.portions.size()) < day_.capacity()) {
                     charge_.begin();
                     if (context_.audio) context_.audio->charging(true, game().data.number("topping_charge_seconds"));
                     refreshButtons();
@@ -510,6 +585,10 @@ bool PlayingState::update(float dt) {
                                 [](const auto &c) { return c.age - c.delay >= .75f; }), coins_.end());
     cookingFx_.update(dt);
     effects_.update(dt);
+    atmosphere_.update(dt, day_.weather(), day_.hour());
+    for (auto &d : departures_) d.age += dt;
+    departures_.erase(std::remove_if(departures_.begin(), departures_.end(), [](const Departure &d) { return d.age > 2.2f; }),
+                      departures_.end());
     game().liveDay = day_.result();
     game().liveCombo = day_.combo();
     if (briefing_) {
@@ -567,7 +646,34 @@ bool PlayingState::update(float dt) {
         for (const auto &customer : day_.customers())
             if (customer.remaining <= dt)
                 leavingVoices.push_back(game().data.customers[customer.kind].femaleVoice);
+    // Vị trí ô khách trước khi cập nhật, để hoạt cảnh bỏ về đứng đúng chỗ.
+    std::map<unsigned, sf::FloatRect> before;
+    for (std::size_t i = 0; i < day_.customers().size(); ++i) before[day_.customers()[i].id] = customerArea(i);
     day_.update(dt);
+    for (const auto &gone : day_.takeDeparted()) {
+        const auto &persona = game().data.personalities[gone.personality];
+        const auto &pool = persona.sad.empty() ? persona.hurry : persona.sad;
+        departures_.push_back({gone.kind, gone.personality, queueSlots(), Expression::Angry,
+                               pool.empty() ? std::string("Thôi, mình đi đây!") : pool[gone.lineSeed % pool.size()],
+                               before.count(gone.id) ? before[gone.id] : customerArea(0), 0.f, false, gone.lineSeed});
+    }
+    if (context_.audio) context_.audio->rain(!day_.ended() && day_.weather() == Weather::Rainy);
+    if (!day_.ended() && day_.weather() != lastWeather_) {
+        const auto now = day_.weather();
+        if (now == Weather::Rainy) banner("Trời đổ mưa!", "Khách thưa hơn • Ai trú mưa cũng kiên nhẫn và tip thêm 10%", {200, 222, 255}, 2.8f);
+        else if (lastWeather_ == Weather::Rainy) banner("Tạnh mưa rồi!", now == Weather::Sunny ? "Nắng lên, khách sắp đông trở lại" : "Trời dịu mát", {255, 236, 180}, 2.4f);
+        else banner(now == Weather::Sunny ? "Nắng lên rồi!" : "Trời nhiều mây", "Thời tiết thay đổi", {255, 236, 180}, 2.0f);
+        lastWeather_ = now;
+    }
+    if (!day_.ended()) {
+        const int hourNow = static_cast<int>(day_.hour());
+        if (hourNow != lastHourMark_) {
+            if (lastHourMark_ >= 0 && hourNow == 11) banner("11:00 • Giờ trưa", "Học sinh, dân văn phòng ghé đông hơn", {255, 240, 200}, 2.2f);
+            if (lastHourMark_ >= 0 && hourNow == 18) banner("18:00 • Chạng vạng", "Phố lên đèn, khách tan ca ghé ăn", {255, 210, 160}, 2.2f);
+            if (lastHourMark_ >= 0 && hourNow == 20) banner("20:00 • Trời tối", "Còn một tiếng nữa là đóng cửa", {200, 206, 255}, 2.2f);
+            lastHourMark_ = hourNow;
+        }
+    }
     if (day_.result().left > oldLeft && !day_.ended()) {
         for (bool female : leavingVoices)
             sound(female ? "female_customer_leave" : "male_customer_leave");
@@ -585,7 +691,7 @@ bool PlayingState::update(float dt) {
         const int whole = static_cast<int>(std::ceil(day_.remaining()));
         if (!warned20_ && day_.remaining() <= 20.f) {
             warned20_ = true;
-            banner("Sắp đóng cửa!", "Còn 20 giây", {255, 150, 120}, 2.2f);
+            banner("Sắp đóng cửa!", DayClock::format(day_.hour()) + " • tiệm đóng lúc 21:00", {255, 150, 120}, 2.2f);
             sound("warning_tick");
         } else if (whole != lastSecond_ && whole <= 5 && whole > 0) sound("warning_tick");
         lastSecond_ = whole;
@@ -666,8 +772,11 @@ void PlayingState::drawCustomers(sf::RenderTarget &target) {
         if (!ui::frame(target, context_.resources, "ui/cozy_frames/chat_bubble",
                        {bubble.left, bubble.top, bubble.width, bubble.height + 16}, {48, 64}, {15, 20}))
             ui::panel(target, bubble, theme.paper, 18);
-        ui::text(target, context_.resources.dialogFont(), kind.special ? "Chị Dung • Tip 100% giá món" : "Cho mình một phần bánh tráng!", r.width < 280 ? 12 : r.width < 320 ? 14 : 16,
-                 {bubble.left + 13, bubble.top + 12}, theme.ink);
+        const auto &persona = game().data.personalities[c.personality];
+        const auto expression = CustomerMood::waiting(c, persona);
+        const std::string speech = kind.special ? "Chị Dung • Tip 100% giá món" : CustomerMood::line(persona, expression, c.lineSeed);
+        ui::textFit(target, context_.resources.dialogFont(), speech, r.width < 280 ? 12 : r.width < 320 ? 14 : 16,
+                    {bubble.left + 13, bubble.top + 12}, expression == Expression::Angry ? theme.red : theme.ink, bubble.width - 26, false, 10);
         int itemIndex = 0;
         for (const auto &item : c.order.recipe) {
             const auto &t = game().data.topping(item.first);
@@ -691,12 +800,28 @@ void PlayingState::drawCustomers(sf::RenderTarget &target) {
         ui::text(target, font, moneyText(c.order.price) + (selected ? "  •  Đang làm" : "  •  Bấm chọn"), 12,
                  {center, bubble.top + bubble.height - (decorated ? 10.f : 14.f)}, selected ? theme.green : theme.muted, true);
         // The original artwork is a bust: keep its aspect ratio and let the counter hide its lower edge.
-        const std::string emotion = mood < .3f ? "angry" : mood > .7f ? "happy" : "normal";
-        const float bob = std::sin(animation_ * 2.1f + static_cast<float>(c.id) * 1.7f) * 2.2f;
-        const float shake = mood < .3f ? std::sin(animation_ * 38.f + static_cast<float>(c.id)) * 1.6f : 0.f;
-        if (!ui::image(target, context_.resources, "customers/" + kind.style + "_" + emotion,
-                       {center - 95 + shake, (decorated ? 237.f : 202.f) + extraHeight + bob * (selected ? 1.4f : 1.f), 190, (decorated ? 125.f : 164.f) - extraHeight}))
+        // Biểu cảm theo tính cách: chọn nét mặt nền, chuyển động và biểu tượng cảm xúc riêng.
+        const std::string emotion = CustomerMood::face(expression);
+        const auto motion = ui::expressionMotion(expression, animation_, c.id * 7919u + c.lineSeed) * (selected ? 1.25f : 1.f);
+        const sf::FloatRect portrait{center - 95 + motion.x, (decorated ? 237.f : 202.f) + extraHeight + motion.y, 190,
+                                     (decorated ? 125.f : 164.f) - extraHeight};
+        if (!ui::image(target, context_.resources, "customers/" + kind.style + "_" + emotion, portrait))
             ui::customer(target, context_.resources, kind, {center, 290}, mood, decorated ? 1.9f : 2.5f);
+        ui::emote(target, font, expression, {center + 46 + motion.x, portrait.top + 22}, animation_ + static_cast<float>(c.id), decorated ? .85f : 1.f);
+        // Thẻ tính cách ở góc bong bóng thoại.
+        if (!kind.special) {
+            const float w = ui::textWidth(context_.resources.smallFont(), persona.name, 11) + 16;
+            const sf::FloatRect tag{bubble.left + bubble.width - w - 6, bubble.top - 9, w, 18};
+            ui::panel(target, {tag.left, tag.top + 1.5f, tag.width, tag.height}, {70, 44, 28, 60}, 9);
+            ui::panel(target, tag, persona.color, 9);
+            ui::text(target, context_.resources.smallFont(), persona.name, 11, {tag.left + tag.width / 2, tag.top + 8}, {255, 252, 240}, true);
+            if (hovered && !persona.trait.empty()) {
+                const float tw = ui::textWidth(font, persona.trait, 12) + 20;
+                const sf::FloatRect tip{std::clamp(center - tw / 2, 6.f, 1274.f - tw), portrait.top - 4, tw, 24};
+                ui::shadowPanel(target, tip, {255, 250, 232, 245}, 10, 3, 40);
+                ui::text(target, font, persona.trait, 12, {tip.left + 10, tip.top + 5}, theme.ink);
+            }
+        }
         const std::string nameFrame = selected ? "customer_name" : "customer_name_unselected";
         if (!ui::frame(target, context_.resources, "ui/cozy_frames/" + nameFrame,
                        {center - 110, 337, 220, 28}, {54, 48}, {14, 13}))
@@ -782,9 +907,19 @@ void PlayingState::drawWorktop(sf::RenderTarget &target) {
                 required = it->second;
         }
         const int have = bowl_.count(t.id);
+        const int left = InventorySystem::stock(game().progress, t.id);
         ui::text(target, context_.resources.smallFont(),
                  t.name + "  " + std::to_string(have) + "/" + std::to_string(required), 14,
                  {r.left + r.width / 2, r.top + 111}, have > required ? theme.red : chosen || required > 0 ? theme.green : theme.ink, true);
+        // Tồn kho: chip góc phải; hết hàng thì phủ mờ khay và ghi HẾT.
+        const sf::Color stockColor = left <= 0 ? theme.red : left <= 3 ? theme.orange : sf::Color(96, 128, 88);
+        ui::panel(target, {r.left + r.width - 44, r.top + 4, 42, 20}, {255, 250, 235, 230}, 10);
+        ui::text(target, context_.resources.smallFont(), left <= 0 ? "Hết" : "×" + std::to_string(left), 12,
+                 {r.left + r.width - 23, r.top + 13}, stockColor, true);
+        if (left <= 0) {
+            ui::radial(target, {r.left + r.width / 2, r.top + 56}, {58, 44}, {60, 40, 28, 120}, {60, 40, 28, 40});
+            ui::outlinedText(target, context_.resources.titleFont(), "HẾT", 22, {r.left + r.width / 2, r.top + 54}, {255, 236, 220}, {150, 60, 40});
+        }
         if (stage_ == Stage::Toppings)
             ui::keycap(target, font, std::to_string(slot + 1), {r.left + 14, r.top + 12});
     }
@@ -836,6 +971,11 @@ void PlayingState::drawWorktop(sf::RenderTarget &target) {
             target.draw(dot);
         }
         ui::keycap(target, font, "Space", {737, 540});
+        // Kiểu nhịp hiện tại (đổi ngẫu nhiên mỗi lần đánh).
+        const std::string rhythm = MixingMinigame::rhythmName(mix_->rhythm());
+        const float rw = ui::textWidth(font, rhythm, 13) + 22;
+        ui::panel(target, {737 - rw / 2, 400, rw, 20}, {120, 86, 40, 210}, 10);
+        ui::text(target, font, rhythm, 13, {737, 409}, {255, 244, 214}, true);
     } else {
         if (!bowlDrag_) {
             ui::radial(target, {bowlCenter.x, bowlCenter.y + 66 * bowlScale() / .62f}, {120 * bowlScale() / .62f, 16}, {61, 36, 20, 70}, {61, 36, 20, 0});
@@ -964,13 +1104,27 @@ void PlayingState::drawHud(sf::RenderTarget &target) {
         ui::text(target, context_.resources.uiFont(),
                  "Đã phục vụ " + std::to_string(day_.result().served) + "  •  " + moneyText(day_.result().revenue + day_.result().tips), 13,
                  {640, 52}, theme.muted, true);
-    const int time = static_cast<int>(std::ceil(remaining));
-    ui::image(target, context_.resources, "ui/hourglass_icon", {65, 25, 26, 30});
+    // Đồng hồ trong game 07:00 → 21:00 thay cho đếm ngược, kèm buổi và thời tiết hiện tại.
+    const float hour = day_.hour();
     sf::Color timeColor = theme.ink;
     if (closing) timeColor = std::fmod(animation_, 1.f) < .5f ? theme.red : sf::Color(235, 90, 60);
-    ui::text(target, context_.resources.smallFont(),
-             std::to_string(time / 60) + ":" + (time % 60 < 10 ? "0" : "") + std::to_string(time % 60),
-             25, {108, 26}, timeColor);
+    ui::clockIcon(target, {48, 45}, 17, hour, {255, 250, 232}, theme.ink);
+    ui::text(target, context_.resources.smallFont(), DayClock::format(hour), 24, {72, 17}, timeColor);
+    const bool clearNight = hour >= 18.5f && day_.weather() == Weather::Sunny;
+    ui::text(target, context_.resources.uiFont(), std::string(DayClock::period(hour)) + " • " +
+                 (clearNight ? "Trời quang" : WeatherSystem::name(day_.weather())), 12, {73, 50}, theme.muted);
+    if (clearNight) {
+        // Trăng lưỡi liềm thay cho mặt trời khi trời tối.
+        ui::radial(target, {182, 38}, {24, 24}, {255, 240, 190, 90}, {255, 240, 190, 0}, true);
+        sf::CircleShape moon(11.f, 30);
+        moon.setOrigin(11, 11);
+        moon.setPosition(182, 38);
+        moon.setFillColor({250, 226, 140});
+        target.draw(moon);
+        moon.setPosition(188, 33);
+        moon.setFillColor({250, 238, 214});
+        target.draw(moon);
+    } else ui::weatherIcon(target, day_.weather(), {182, 38}, 30, animation_);
     ui::ProgressBar::draw(target, {260, 65, 760, 5}, remaining / game().data.number("day_seconds"),
                           closing ? theme.red : rush ? theme.orange : theme.green);
     // Combo: chip vàng khi đang có chuỗi, mờ khi chưa có.
@@ -1131,12 +1285,72 @@ void PlayingState::drawBriefing(sf::RenderTarget &target) {
         const std::string reward = "+" + moneyText(goals[i].reward);
         ui::text(target, font, reward, 17, {card.left + card.width - 52 - ui::textWidth(font, reward, 17), y + 11}, theme.green);
     }
-    ui::text(target, context_.resources.titleFont(), "Mẹo nhỏ", 18, {card.left + 40, card.top + 326}, theme.orange);
-    ui::paragraph(target, font, "Giao liên tiếp các đơn từ 4 sao để nhân combo (tip tăng dần). Giờ cao điểm sẽ đến bất ngờ: khách đông hơn nhưng tip thêm 20%.",
-                  14, {card.left + 40, card.top + 352}, card.width - 80, 20, theme.muted);
+    // Dự báo thời tiết và kho hàng đã chuẩn bị.
+    const auto &plan = day_.weatherPlan();
+    ui::panel(target, {card.left + 36, card.top + 318, card.width - 72, 92}, {236, 242, 248}, 14);
+    ui::weatherIcon(target, plan.base, {card.left + 76, card.top + 352}, 42, briefingAge_);
+    ui::text(target, context_.resources.titleFont(), "Dự báo: " + WeatherSystem::summary(plan), 18, {card.left + 110, card.top + 328}, theme.ink);
+    ui::paragraph(target, font, WeatherSystem::advice(plan), 13, {card.left + 110, card.top + 354}, card.width - 170, 17, theme.muted);
+    int portions = 0, empty = 0;
+    for (const auto index : available_) {
+        const int left = InventorySystem::stock(game().progress, game().data.toppings[index].id);
+        portions += left;
+        empty += left <= 0 ? 1 : 0;
+    }
+    ui::text(target, font, "Kho: " + std::to_string(portions) + " muỗng" + (empty ? " • " + std::to_string(empty) + " loại đã hết" : " • đủ mọi loại"),
+             13, {card.left + 110, card.top + 388}, empty ? theme.red : theme.green);
     ui::text(target, font, "Ví: " + moneyText(game().progress.money), 16, {640, card.top + 428}, theme.green, true);
     ui::text(target, font, "Enter / Space để bắt đầu  •  ESC để tạm dừng", 13, {640, card.top + 496}, theme.muted, true);
     startButton_->render(target);
+}
+void PlayingState::drawScene(sf::RenderTarget &target, bool) {
+    // Nắng mạnh ban ngày, yếu dần về chiều; trời mưa/mây che nắng. Cảnh tối dần theo giờ.
+    const auto light = atmosphere_.light();
+    const auto shafts = static_cast<sf::Uint8>(26.f * light.sun * (1.f - .6f * atmosphere_.cloud()));
+    if (shafts > 1) ui::lightShafts(target, {0, 92, 1280, 270}, animation_, shafts);
+    ui::dust(target, {0, 92, 1280, 270}, animation_, 22, static_cast<sf::Uint8>(90.f * std::max(.15f, light.sun)));
+    atmosphere_.shade(target, {0, 0, 1280, 368}, 1.f);
+    atmosphere_.shade(target, {0, 368, 1280, 352}, .35f);
+    atmosphere_.nightLights(target, animation_, UpgradeSystem::effect(game().data, game().progress, "lantern") > 0);
+    atmosphere_.drawRain(target, {0, 84, 1280, 284});
+    ui::vignette(target, static_cast<sf::Uint8>(46 + 40 * light.night));
+}
+void PlayingState::drawDepartures(sf::RenderTarget &target) {
+    const ui::Theme theme;
+    for (const auto &d : departures_) {
+        const auto &kind = game().data.customers[d.kind];
+        const float t = std::clamp(d.age / 2.2f, 0.f, 1.f);
+        const float fade = t < .55f ? 1.f : 1.f - (t - .55f) / .45f;
+        const float center = d.area.left + d.area.width / 2.f;
+        // Khách vui nhảy lên rồi đi sang phải; khách bực quay đi sang trái.
+        const float walk = t < .45f ? 0.f : (t - .45f) / .55f;
+        const float dx = (d.served ? 1.f : -1.f) * walk * 120.f;
+        const auto motion = ui::expressionMotion(d.expression, d.age * 1.4f, d.seed);
+        const sf::FloatRect portrait{center - 95 + dx + motion.x, 202.f + motion.y, 190, 164};
+        if (const auto *texture = context_.resources.texture("assets/images/cozy/customers/" + kind.style + "_" +
+                                                             CustomerMood::face(d.expression) + ".png")) {
+            sf::Sprite sprite(*texture);
+            const auto size = texture->getSize();
+            const float scale = std::min(portrait.width / size.x, portrait.height / size.y);
+            sprite.setScale(scale, scale);
+            sprite.setPosition(portrait.left + (portrait.width - size.x * scale) / 2, portrait.top + (portrait.height - size.y * scale) / 2);
+            sprite.setColor({255, 255, 255, static_cast<sf::Uint8>(255 * fade)});
+            target.draw(sprite);
+        }
+        if (fade > .3f) ui::emote(target, context_.resources.uiFont(), d.expression, {center + 46 + dx, portrait.top + 22}, d.age * 1.3f);
+        // Bong bóng câu nói khi rời quầy.
+        if (t < .8f && !d.line.empty()) {
+            const auto &font = context_.resources.dialogFont();
+            const float w = std::min(d.area.width - 10, ui::textWidth(font, d.line, 15) + 28);
+            const float pop = ui::easeOut(std::min(1.f, d.age / .25f));
+            const sf::FloatRect bubble{center - w / 2 + dx * .3f, portrait.top + 6.f - 10.f * pop, w, 34};
+            const auto a = static_cast<sf::Uint8>(245 * fade);
+            ui::shadowPanel(target, bubble, {255, 252, 240, a}, 14, 3, static_cast<sf::Uint8>(40 * fade));
+            ui::panelOutline(target, bubble, d.served ? sf::Color(120, 170, 100, a) : sf::Color(205, 90, 66, a), 14, 2);
+            ui::textFit(target, font, d.line, 15, {bubble.left + bubble.width / 2, bubble.top + 16},
+                        {theme.ink.r, theme.ink.g, theme.ink.b, a}, w - 20, true, 10);
+        }
+    }
 }
 void PlayingState::render(sf::RenderTarget &target) {
     const ui::Theme theme;
@@ -1185,11 +1399,11 @@ void PlayingState::render(sf::RenderTarget &target) {
         }
     }
     // Ánh nắng và bụi bay trên phố tạo chiều sâu cho cảnh.
-    ui::lightShafts(target, {0, 92, 1280, 270}, animation_, 26);
-    ui::dust(target, {0, 92, 1280, 270}, animation_, 22, 90);
-    ui::vignette(target, 46);
+    drawScene(target, scene);
     drawHud(target);
+    drawDepartures(target);
     drawCustomers(target);
+    atmosphere_.drawSplashes(target);
     // The new scene supplies the wooden worktop; retain a fallback for missing art.
     if (!scene) {
         ui::panel(target, {15, 366, 1250, 291}, {193, 149, 105}, 14);
@@ -1200,7 +1414,7 @@ void PlayingState::render(sf::RenderTarget &target) {
              {61, 373}, {255, 248, 220});
     drawWorktop(target);
     for (std::size_t i = 0; i < buttons_.size(); ++i)
-        if (i != 5 || stage_ == Stage::Toppings) buttons_[i].render(target);
+        if ((i != 5 || stage_ == Stage::Toppings) && (i != 6 || buttons_[6].enabled())) buttons_[i].render(target);
     drawHint(target);
     if (!game().saves.error().empty())
         ui::text(target, font, game().saves.error(), 13, {30, 660}, {171, 65, 43});

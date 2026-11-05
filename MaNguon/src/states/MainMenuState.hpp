@@ -9,6 +9,7 @@ class MainMenuState final : public UiState {
     void render(sf::RenderTarget &) override;
 
   private:
+    void openShop();
     bool confirmReset_{false};
     std::vector<ui::Button> resetButtons_;
     float time_{};

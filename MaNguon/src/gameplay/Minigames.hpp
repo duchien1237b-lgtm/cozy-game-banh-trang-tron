@@ -43,9 +43,12 @@ class ToppingCharge {
     float seconds_, elapsed_{};
     bool active_{};
 };
+// Nhịp trộn: nhịp đầu luôn đều (dễ làm quen); từ nhịp thứ hai mỗi nhịp bốc ngẫu nhiên một kiểu,
+// tốc độ, vị trí và độ rộng vùng xanh. Seed cố định giúp kiểm thử tái lập được.
+enum class MixRhythm { Steady, Fast, Slow, Wobble, Reverse };
 class MixingMinigame {
   public:
-    MixingMinigame(const GameData &, float bonus, int day);
+    MixingMinigame(const GameData &, float bonus, int day, unsigned seed = 0x6D1Bu);
     void update(float dt);
     std::optional<float> hit();
     bool done() const {
@@ -64,10 +67,17 @@ class MixingMinigame {
     int hits() const {
         return hits_;
     }
+    MixRhythm rhythm() const { return rhythm_; }
+    float speed() const { return speed_ * speedScale_; }
+    static const char *rhythmName(MixRhythm);
 
   private:
+    void nextBeat();
     const GameData &data_;
-    float position_{0.05f}, direction_{1}, speed_{}, width_{}, cooldown_{}, sum_{}, target_{.5f};
+    std::mt19937 random_;
+    float position_{0.05f}, direction_{1}, speed_{}, width_{}, baseWidth_{}, cooldown_{}, sum_{}, target_{.5f};
+    float speedScale_{1.f}, beatClock_{}, reverseAt_{-1.f};
+    MixRhythm rhythm_{MixRhythm::Steady};
     int hits_{};
 };
 } // namespace tiem

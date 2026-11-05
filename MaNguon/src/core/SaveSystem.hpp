@@ -25,6 +25,8 @@ struct GameServices {
     int liveCombo{};
     bool hasResult{false};
     bool dailyPrompted{false};
+    // Màn hướng dẫn mở từ menu (xem lại) thì quay về menu thay vì vào ngày chơi.
+    bool guideFromMenu{false};
     explicit GameServices(const std::filesystem::path &root,
                           const std::filesystem::path &saveFolder = SaveSystem::defaultFolder())
         : data(root), saves(saveFolder), progress(saves.load(data)) {}
@@ -40,6 +42,7 @@ struct GameServices {
         fresh.dailyStreak = progress.dailyStreak;
         fresh.lastDaily = progress.lastDaily;
         fresh.tutorialDone = progress.tutorialDone;
+        fresh.guideDone = progress.guideDone;
         fresh.achievements = progress.achievements;
         if (!saves.write(fresh)) return false;
         progress = std::move(fresh);

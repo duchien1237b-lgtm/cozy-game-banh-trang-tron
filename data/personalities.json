@@ -1,0 +1,262 @@
+{
+  "personalities": [
+    {
+      "id": "normal",
+      "name": "Điềm đạm",
+      "trait": "Ăn gì cũng được, đúng đơn là vui",
+      "color": [
+        150,
+        120,
+        96
+      ],
+      "weight": 1.0,
+      "patience": 1.0,
+      "tip": 1.0,
+      "strict": 1.0,
+      "fast_tip": 0.0,
+      "anger_at": 0.3,
+      "worry_at": 0.5,
+      "greet": [
+        "Cho mình một phần bánh tráng!",
+        "Một phần như đơn nha tiệm.",
+        "Làm giúp mình một phần nhé."
+      ],
+      "waiting": [
+        "Thơm ghê ta."
+      ],
+      "hurry": [
+        "Sắp tới lượt mình chưa nhỉ?",
+        "Hơi lâu rồi đó tiệm ơi."
+      ],
+      "happy": [
+        "Ngon đó!",
+        "Cảm ơn tiệm nha."
+      ],
+      "sad": [
+        "Chưa ngon lắm…"
+      ]
+    },
+    {
+      "id": "cheerful",
+      "name": "Vui vẻ",
+      "trait": "Luôn tươi cười, dễ tính",
+      "color": [
+        236,
+        150,
+        64
+      ],
+      "weight": 1.2,
+      "patience": 1.05,
+      "tip": 1.0,
+      "strict": 0.9,
+      "fast_tip": 0.0,
+      "anger_at": 0.22,
+      "worry_at": 0.4,
+      "cheerful": true,
+      "greet": [
+        "Chào tiệm! Cho mình một phần nha!",
+        "Hôm nay đẹp trời ghê, làm cho mình một phần nhé!",
+        "Nghe nói tiệm ngon lắm nè!"
+      ],
+      "waiting": [
+        "Thơm quá đi mất!",
+        "Không vội đâu, cứ từ từ nha!",
+        "Tiệm dễ thương ghê!"
+      ],
+      "hurry": [
+        "Ơ… sắp xong chưa tiệm ơi?",
+        "Mình hơi đói rồi đó nha!"
+      ],
+      "happy": [
+        "Ngon xỉu luôn!",
+        "Tuyệt vời, cảm ơn tiệm!"
+      ],
+      "sad": [
+        "Hơi lạ miệng ha…",
+        "Lần sau chắc ngon hơn!"
+      ]
+    },
+    {
+      "id": "hot_tempered",
+      "name": "Nóng tính",
+      "trait": "Mau sốt ruột, giao nhanh thì tip đậm",
+      "color": [
+        214,
+        84,
+        62
+      ],
+      "weight": 0.9,
+      "patience": 0.82,
+      "tip": 1.05,
+      "strict": 1.0,
+      "fast_tip": 0.12,
+      "anger_at": 0.42,
+      "worry_at": 0.62,
+      "greet": [
+        "Một phần, làm nhanh giùm nha!",
+        "Đang gấp, tiệm làm lẹ giúp mình!"
+      ],
+      "waiting": [
+        "Nhanh nhanh lên nha!"
+      ],
+      "hurry": [
+        "Sao lâu vậy trời!",
+        "Tui đứng chờ mỏi chân rồi đó!",
+        "Nhanh lên coi!"
+      ],
+      "happy": [
+        "Được đó, nhanh gọn!",
+        "Vậy mới được chứ!"
+      ],
+      "sad": [
+        "Lâu mà còn không đúng ý!",
+        "Thôi, lần sau tính!"
+      ]
+    },
+    {
+      "id": "picky",
+      "name": "Kỹ tính",
+      "trait": "Soi từng muỗng, sai đơn bị trừ điểm nặng",
+      "color": [
+        120,
+        110,
+        170
+      ],
+      "weight": 0.8,
+      "patience": 1.0,
+      "tip": 1.15,
+      "strict": 1.35,
+      "fast_tip": 0.0,
+      "anger_at": 0.3,
+      "worry_at": 0.5,
+      "greet": [
+        "Làm đúng đơn giúp mình nha, không thừa không thiếu.",
+        "Mình ăn kỹ lắm đó nha tiệm."
+      ],
+      "waiting": [
+        "Nhớ đúng số muỗng nha."
+      ],
+      "hurry": [
+        "Làm kỹ nhưng cũng nhanh chút nha.",
+        "Hừm… chờ hơi lâu rồi."
+      ],
+      "happy": [
+        "Chuẩn từng muỗng, khen!",
+        "Đúng ý mình luôn."
+      ],
+      "sad": [
+        "Không đúng đơn rồi…",
+        "Thiếu chuẩn quá."
+      ]
+    },
+    {
+      "id": "generous",
+      "name": "Hào phóng",
+      "trait": "Thích là bo tip rất mạnh tay",
+      "color": [
+        210,
+        160,
+        50
+      ],
+      "weight": 0.7,
+      "patience": 1.05,
+      "tip": 1.6,
+      "strict": 1.0,
+      "fast_tip": 0.0,
+      "anger_at": 0.25,
+      "worry_at": 0.45,
+      "cheerful": true,
+      "greet": [
+        "Làm ngon vào, có tip cho nha!",
+        "Cho một phần thiệt ngon nhé, tip liền!"
+      ],
+      "waiting": [
+        "Ngon thì không tiếc tiền đâu!"
+      ],
+      "hurry": [
+        "Hơi lâu rồi đó nha…"
+      ],
+      "happy": [
+        "Ngon! Cầm tip đi em!",
+        "Quá đã, tip thêm nè!"
+      ],
+      "sad": [
+        "Tiếc ghê, chưa ưng lắm."
+      ]
+    },
+    {
+      "id": "easygoing",
+      "name": "Thong thả",
+      "trait": "Rất kiên nhẫn, nhưng tip ít hơn",
+      "color": [
+        96,
+        150,
+        110
+      ],
+      "weight": 1.0,
+      "patience": 1.3,
+      "tip": 0.85,
+      "strict": 0.95,
+      "fast_tip": 0.0,
+      "anger_at": 0.15,
+      "worry_at": 0.35,
+      "calm": true,
+      "greet": [
+        "Cứ từ từ nha, mình không vội.",
+        "Cho một phần, ngồi chơi chờ cũng được."
+      ],
+      "waiting": [
+        "Gió mát ghê…"
+      ],
+      "hurry": [
+        "Oáp… buồn ngủ quá.",
+        "Chờ lâu cũng hơi mỏi ha."
+      ],
+      "happy": [
+        "Ngon lành!",
+        "Ăn vầy là vui rồi."
+      ],
+      "sad": [
+        "Cũng được… chắc vậy."
+      ]
+    },
+    {
+      "id": "chatty",
+      "name": "Nói nhiều",
+      "trait": "Hay trò chuyện, dễ vui, hay đăng đánh giá",
+      "color": [
+        70,
+        140,
+        180
+      ],
+      "weight": 0.9,
+      "patience": 0.95,
+      "tip": 1.1,
+      "strict": 1.0,
+      "fast_tip": 0.04,
+      "anger_at": 0.28,
+      "worry_at": 0.5,
+      "cheerful": true,
+      "greet": [
+        "Ủa tiệm mới mở hả? Cho mình một phần!",
+        "Hôm qua bạn mình khen tiệm quá trời!",
+        "Trời ơi kể nghe nè, đói muốn xỉu!"
+      ],
+      "waiting": [
+        "Tiệm bán lâu chưa? Đông ghê ha!",
+        "Mình hay ghé đường này lắm đó!"
+      ],
+      "hurry": [
+        "Nãy giờ mình kể hết chuyện luôn rồi á…",
+        "Ủa sắp tới mình chưa?"
+      ],
+      "happy": [
+        "Ngon dữ! Về khoe bạn liền!",
+        "Phải lên mạng khen mới được!"
+      ],
+      "sad": [
+        "Ủa sao kỳ vậy ta…"
+      ]
+    }
+  ]
+}
