@@ -39,7 +39,6 @@ ManagementState::ManagementState(StateStack &stack, AppContext &context, StateID
     if (context_.audio) {
         context_.audio->music("menu");
     }
-    // Kiểm tra lại thành tựu khi vào cửa hàng (ví dụ mở topping, nâng cấp từ lượt trước).
     rebuild();
 }
 sf::FloatRect ManagementState::cardRect(std::size_t slot) const {
@@ -144,7 +143,6 @@ bool ManagementState::update(float dt) {
     for (auto &toast : toasts_) toast.age += dt;
     while (!toasts_.empty() && toasts_.front().age > 4.f) toasts_.pop_front();
     if (kind_ == StateID::DayResult) {
-        // Sao nảy lần lượt kèm âm thanh; ngày tốt có thêm tia sáng chúc mừng.
         const auto &r = game().lastDay;
         for (unsigned i = 0; i < 5; ++i)
             if (!(starsPopped_ & (1u << i)) && age_ > .35f + static_cast<float>(i) * .17f) {
