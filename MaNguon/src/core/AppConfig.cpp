@@ -2,7 +2,6 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
-
 namespace tiem {
 AppConfig AppConfig::load(const std::filesystem::path &file) {
     try {
@@ -30,4 +29,4 @@ AppConfig AppConfig::load(const std::filesystem::path &file) {
         throw std::runtime_error("Loi cau hinh " + file.u8string() + ": " + error.what());
     }
 }
-} // namespace tiem
+} 
