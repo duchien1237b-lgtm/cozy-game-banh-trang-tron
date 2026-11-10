@@ -22,12 +22,10 @@ void AudioManager::music(const std::string &scene) {
         }
     }
     scene_ = scene;
-    // SFML stream giữ vùng nhớ đầu vào trong suốt thời gian phát nhạc.
     for (const auto *extension : {".mp3", ".wav"}) {
         std::ifstream stream(root_ / "assets/audio/music" / (scene + extension), std::ios::binary);
         std::vector<char> bytes{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
         if (bytes.empty()) continue;
-        // SFML's new stream reads from bytes; swap keeps those bytes alive after this function returns.
         if (music_.openFromMemory(bytes.data(), bytes.size())) {
             musicBytes_.swap(bytes);
             music_.setLoop(true);
@@ -36,7 +34,6 @@ void AudioManager::music(const std::string &scene) {
             return;
         }
     }
-    // Allow a later retry if the requested file was missing or unreadable.
     scene_.clear();
 }
 void AudioManager::play(const std::string &name) {
