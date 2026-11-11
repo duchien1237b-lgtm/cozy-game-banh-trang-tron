@@ -1,4 +1,4 @@
-# Bánh Tráng Trộn Tiệm — v3
+# Bánh Tráng Trộn Tiệm - v3
 
 Game quản lý quán bánh tráng trộn bằng **C++17 / SFML 2.6.2**. Bản này đã nối đầy đủ vòng chơi, không còn các màn hình thử của từng mốc. Đồ họa dùng bộ sprite Cozy và nền đường phố riêng cho menu, màn chơi; nhạc nền do người dùng cung cấp và SFX đã kèm, không cần tải thêm tài nguyên để chơi.
 
@@ -54,7 +54,6 @@ Tự lưu sau mỗi món, mỗi giao dịch, thay đổi âm lượng, hết ng�
 Có `save.bak`; file JSON hỏng được giữ lại với hậu tố `.corrupt-...`, rồi thử phục hồi bản dự phòng. Tiến trình không nằm trong thư mục game nên thay folder game không xóa tiền đã kiếm. Có thể sao lưu thư mục trên khi game đã đóng. Biến môi trường `TIEM_SAVE_DIR` chỉ để kiểm thử hoặc chủ động chọn nơi lưu khác.
 
 ## Cấu trúc mã nguồn
-
 | Vị trí | Vai trò |
 |---|---|
 | `src/core/Game.*` | Cửa sổ, sự kiện, delta time, letterbox, vòng lặp 60 FPS |
