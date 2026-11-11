@@ -194,3 +194,8 @@ Bảy tính năng mới: thời tiết, chuẩn bị nguyên liệu, nhịp tr�
 - Hành trình đầy đủ chạy qua StateStack thật: menu → hướng dẫn → chuẩn bị → chơi → kết quả → chuẩn bị ngày 2 → menu. Đã xem ảnh chụp 1280x720 của từng màn mới.
 - Windows x64: `GocNhoBanhTrang.exe` được cross-compile bằng MinGW-w64 (posix) với SFML 2.6.2 tĩnh build từ source; chỉ phụ thuộc DLL hệ thống và `openal32.dll` có sẵn. Bản test Windows chạy PASS dưới Wine 9; game mở được tới menu dưới Wine. Chưa chạy thử trên máy Windows thật và chưa nghe thử âm thanh bằng loa.
 - Save cũ (không có `guide_done`, `stock`) vẫn đọc được: người chơi đã qua ngày 1 không bị bắt xem lại hướng dẫn, kho bắt đầu trống và nhập ở màn Chuẩn bị.
+
+
+## Bỏ viền đỏ cuối màn — 2026-11-10
+
+Rà soát phiên bản v3 hiện tại và xóa lớp vignette/radial đỏ nhấp nháy trong 20 giây cuối của PlayingState::render. Build Release Windows thành công; CTest 1/1 đạt. PreviewFeatures xuất màn sáng, mưa trưa, hoàng hôn và đêm ở giây 172 (còn khoảng 8 giây); đã kiểm tra ảnh đêm không còn viền đỏ. Dùng save thử riêng. Cập nhật GocNhoBanhTrang.exe và manifest.

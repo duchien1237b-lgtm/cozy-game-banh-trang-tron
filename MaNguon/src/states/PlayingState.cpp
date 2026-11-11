@@ -1437,12 +1437,6 @@ void PlayingState::render(sf::RenderTarget &target) {
     }
     if (bowlDrag_ && pointer_)
         ui::bowl(target, context_.resources, game().data, bowl_, *pointer_, .5f, true, toppingsComplete());
-    // Cảnh báo sắp hết giờ: viền đỏ nhịp thở.
-    if (!briefing_ && day_.remaining() <= 20.f && !day_.ended()) {
-        const float pulse = .5f + .5f * std::sin(animation_ * 5.f);
-        ui::vignette(target, static_cast<sf::Uint8>(30 + 40 * pulse));
-        ui::radial(target, {640, 360}, {900, 600}, {0, 0, 0, 0}, {200, 40, 20, static_cast<sf::Uint8>(40 + 40 * pulse)});
-    }
     drawTutorial(target);
     cookingFx_.render(target);
     effects_.render(target, font);
